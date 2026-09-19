@@ -34,6 +34,15 @@ def record_contribution():
             contributions.append(new_contribution)
     print(contributions) #Testing purposes,remove later
 
+def view_contributions():
+    print("Contributions")
+    j = 0
+    while j < 30:
+        print("-", end='')
+        j += 1
+    for contribution in contributions:
+        print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{contribution['name']} \t\t{contribution['amount']}")
+
 while True:
     #Prompt user to select option from the menu
     option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total\n").strip())
@@ -56,3 +65,6 @@ while True:
             print("-", end='')
             i += 1
         record_contribution()
+
+    elif option == 4:
+        view_contributions()
