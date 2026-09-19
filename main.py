@@ -31,17 +31,17 @@ def record_contribution():
         if member['member_id'] == member_contributing:
             new_contribution = {'amount': amount, 'date': today.strftime("%d/%b/%Y")}
             member['contributions'].append(new_contribution)
-    #print(contributions) #Testing purposes,remove later
     print(members) #Testing purposes,remove later
 
-# def view_contributions():
-#     print("Contributions")
-#     j = 0   
-#     while j < 30:
-#         print("-", end='')
-#         j += 1
-#     for contribution in contributions:
-#         print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{contribution['name']} \t\t{contribution['amount']}")
+def view_contributions():
+    print("Contributions")
+    j = 0   
+    while j < 30:
+        print("-", end='')
+        j += 1
+    for member in members:
+        for contribution in member['contributions']:
+            print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{member['name']} \t\t{contribution['amount']}")
 
 while True:
     #Prompt user to select option from the menu
@@ -66,5 +66,5 @@ while True:
             i += 1
         record_contribution()
 
-    # elif option == 4:
-    #     view_contributions()
+    elif option == 4:
+        view_contributions()
