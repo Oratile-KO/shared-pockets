@@ -2,7 +2,6 @@ from datetime import date
 
 #Declare and Initialize the members list
 members = []
-contributions = []
 prefix  = 'M'
 suffix = 1
 today = date.today()
@@ -14,7 +13,7 @@ def add_member(prefix, suffix):
     suffix += len(members)
     print(suffix) #Testing purposes, remove later
     member_id = prefix  + f"{suffix:03}"
-    new_member = {'name': name, 'member_id': member_id}  #Add new member to list
+    new_member = {'name': name, 'member_id': member_id, 'contributions':  []}  #Add new member to list
     members.append(new_member)
     print(f"{name} added successfully! Member ID: {member_id}\n")
 
@@ -28,20 +27,21 @@ def record_contribution():
     view_member()
     member_contributing = input("Enter member ID: ").strip().capitalize()
     amount = float(input(f"Enter amount member is contributing: ").strip()) 
-    for contribution in members:
-        if contribution['member_id'] == member_contributing:
-            new_contribution = {'name':contribution['name'], 'member_id': member_contributing, 'amount': amount, 'date': today.strftime("%d/%b/%Y")}
-            contributions.append(new_contribution)
-    print(contributions) #Testing purposes,remove later
+    for member in members:
+        if member['member_id'] == member_contributing:
+            new_contribution = {'amount': amount, 'date': today.strftime("%d/%b/%Y")}
+            member['contributions'].append(new_contribution)
+    #print(contributions) #Testing purposes,remove later
+    print(members) #Testing purposes,remove later
 
-def view_contributions():
-    print("Contributions")
-    j = 0
-    while j < 30:
-        print("-", end='')
-        j += 1
-    for contribution in contributions:
-        print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{contribution['name']} \t\t{contribution['amount']}")
+# def view_contributions():
+#     print("Contributions")
+#     j = 0   
+#     while j < 30:
+#         print("-", end='')
+#         j += 1
+#     for contribution in contributions:
+#         print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{contribution['name']} \t\t{contribution['amount']}")
 
 while True:
     #Prompt user to select option from the menu
@@ -66,5 +66,5 @@ while True:
             i += 1
         record_contribution()
 
-    elif option == 4:
-        view_contributions()
+    # elif option == 4:
+    #     view_contributions()
