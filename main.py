@@ -2,7 +2,6 @@ from datetime import date
 
 #Declare and Initialize the members list
 members = []
-today = date.today()
 
 #Create function to add member
 def add_member():
@@ -24,6 +23,7 @@ def view_member():
 
 #Record member contributions
 def record_contribution():
+    today = date.today()
     view_member()
     member_contributing = input("Enter member ID: ").strip().capitalize()
     amount = float(input(f"Enter amount member is contributing: ").strip()) 
