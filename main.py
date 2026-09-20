@@ -43,6 +43,18 @@ def view_contributions():
         for contribution in member['contributions']:
             print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{member['name']} \t\t{contribution['amount']}")
 
+def calc_member_total():
+    view_member()
+    member_selected = input(f"Enter the name of the member: ").strip().capitalize()
+    amounts = []
+    for member in members:
+        if member['member_id'] == member_selected:
+            for contribution in member['contributions']:
+                amounts.append(contribution['amount'])
+            print(f"Member \t\tTotal Contributed \n{member['name']} \t\t{sum(amounts)}")
+                # print(contribution)
+                # print(type(contribution))
+
 while True:
     #Prompt user to select option from the menu
     option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total\n").strip())
@@ -68,3 +80,11 @@ while True:
 
     elif option == 4:
         view_contributions()
+
+    elif option == 5:
+        print("Available members:")
+        i = 0
+        while i < 20:
+            print("-", end='')
+            i += 1
+        calc_member_total()
