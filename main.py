@@ -2,12 +2,12 @@ from datetime import date
 
 #Declare and Initialize the members list
 members = []
-prefix  = 'M'
-suffix = 1
 today = date.today()
 
 #Create function to add member
-def add_member(prefix, suffix):
+def add_member():
+    prefix  = 'M'
+    suffix = 1
     name = input("Enter member name: ").strip().capitalize()
     #Generate ID
     suffix += len(members)
@@ -45,7 +45,7 @@ def view_contributions():
 
 def calc_member_total():
     view_member()
-    member_selected = input(f"Enter the name of the member: ").strip().capitalize()
+    member_selected = input(f"Enter the member ID: ").strip().capitalize()
     amounts = []
     for member in members:
         if member['member_id'] == member_selected:
@@ -65,7 +65,7 @@ while True:
     option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total\n").strip())
 
     if option == 1:
-        add_member(prefix, suffix)
+        add_member()
 
     elif option == 2:
         print("Members")
