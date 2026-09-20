@@ -52,8 +52,13 @@ def calc_member_total():
             for contribution in member['contributions']:
                 amounts.append(contribution['amount'])
             print(f"Member \t\tTotal Contributed \n{member['name']} \t\t{sum(amounts)}")
-                # print(contribution)
-                # print(type(contribution))
+
+def calc_group_total():
+    group_total = []
+    for member in members:
+        for contribution in member['contributions']:
+            group_total.append(contribution['amount'])
+    print(f"Group total: {sum(group_total)}")
 
 while True:
     #Prompt user to select option from the menu
@@ -88,3 +93,6 @@ while True:
             print("-", end='')
             i += 1
         calc_member_total()
+
+    elif  option ==  6:
+        calc_group_total()
