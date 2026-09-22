@@ -54,23 +54,24 @@ def view_contributions():
 def calc_member_total():
     view_member()
     member_selected = input(f"Enter the member ID: ").strip().capitalize()
+    member_found = False
     for member in members:
         total = 0
         if member['member_id'] == member_selected:
+            member_found = True
             for contribution in member['contributions']:
                 total += contribution['amount']
             if total > 0:
                 print(f"Member \t\tTotal Contributed \n{member['name']} \t\tR{total:,.2f}")
             else:
                 print(f"{member['name']} has not made any contributions yet!")
+    if member_found == False:
+        print("Please enter an existing member ID")
 
 def calc_group_total():
     group_total = []
     for member in members:
-        total = 0
         for contribution in member['contributions']:
-            total += contribution['amount']
-            print(f"The total is: R{total}")
             group_total.append(contribution['amount'])
     print(f"Group total: R{sum(group_total):,.2f}")
 
