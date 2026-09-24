@@ -1,7 +1,16 @@
 from datetime import date
+import json
 
+#Load the saved JSON file
+def load_data():
+    try:
+        with open('members.json', 'r') as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 #Declare and Initialize the members list
-members = []
+members = load_data()
+        
 #Create function to add member
 def add_member():
     prefix  = 'M'
@@ -13,11 +22,12 @@ def add_member():
     new_member = {'name': name, 'member_id': member_id, 'contributions':  []}  #Add new member to list
     members.append(new_member)
     print(f"{name} added successfully! Member ID: {member_id}")
+    save_data()
 
 #Display the members and their member ID's
 def view_member():
     for member in members:
-        print(f"\n{member['member_id']} {member['name']}")
+        print(f"{member['member_id']} {member['name']}")
 
 def find_member(member_id):
     for member in members:
@@ -28,7 +38,7 @@ def find_member(member_id):
 def record_contribution():
     today = date.today()
     view_member()   
-    member_id = input("\nEnter member ID: ").strip().capitalize()
+    member_id = input("Enter member ID: ").strip().capitalize()
     member = find_member(member_id)
     if member:
             try: 
@@ -38,6 +48,7 @@ def record_contribution():
                 else:
                     new_contribution = {'amount': amount, 'date': today.strftime("%d/%b/%Y")}
                     member['contributions'].append(new_contribution)
+                    save_data()
             except ValueError: 
                 print("Please enter a valid amount!")
     else:
@@ -48,7 +59,7 @@ def view_contributions():
     print_separator()
     for member in members:
         for contribution in member['contributions']:
-            print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{member['name']} \t\tR{contribution['amount']:,.2f}")
+            print(f"Date \t\tMember \t\tAmount \n{contribution['date']} \t{member['name']} \t\tR{contribution['amount']:,.2f}")
 
 def calc_member_total():
     view_member()
@@ -78,10 +89,14 @@ def has_members():
 def print_separator():
     print("-" * 35)
 
+def save_data():
+    with open('members.json', 'w') as file:
+        json.dump(members, file)
+
 while True:
     #Prompt user to select option from the menu
     try:
-        option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total\n").strip())
+        option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total \n7. Close\n").strip())
 
         if option == 1:
             add_member()
@@ -121,6 +136,11 @@ while True:
              calc_group_total()
             else:
                 print("No member has been added yet!")
+
+        elif option == 7:
+            save_data()
+            print("Goodbye!")
+            break
 
         else:
             print("Invalid selection! Please try again.")
