@@ -2,7 +2,6 @@ from datetime import date
 
 #Declare and Initialize the members list
 members = []
-
 #Create function to add member
 def add_member():
     prefix  = 'M'
@@ -20,15 +19,18 @@ def view_member():
     for member in members:
         print(f"\n{member['member_id']} {member['name']}")
 
-#Record member contributions
+def find_member(member_id):
+    for member in members:
+        if member['member_id'] == member_id:
+            return member
+    return None
+ 
 def record_contribution():
     today = date.today()
     view_member()   
-    member_contributing = input("\nEnter member ID: ").strip().capitalize()
-    member_found = False
-    for member in members:
-        if member['member_id'] == member_contributing:
-            member_found = True
+    member_id = input("\nEnter member ID: ").strip().capitalize()
+    member = find_member(member_id)
+    if member:
             try: 
                 amount = float(input(f"Enter amount member is contributing: ").strip()) 
                 if amount <= 0:
@@ -38,42 +40,43 @@ def record_contribution():
                     member['contributions'].append(new_contribution)
             except ValueError: 
                 print("Please enter a valid amount!")
-    if member_found == False:
-        print(f"Member ID '{member_contributing}' does not exist! Please try again.")
+    else:
+        print(f"Member ID '{member_id}' does not exist! Please try again.")
 
 def view_contributions():
     print("Contributions")
-    j = 0   
-    while j < 30:
-        print("-", end='')
-        j += 1
+    print_separator()
     for member in members:
         for contribution in member['contributions']:
             print(f"\nDate \t\tMember \t\tAmount \n{contribution['date']} \t{member['name']} \t\tR{contribution['amount']:,.2f}")
 
 def calc_member_total():
     view_member()
-    member_selected = input(f"Enter the member ID: ").strip().capitalize()
-    member_found = False
-    for member in members:
-        total = 0
-        if member['member_id'] == member_selected:
-            member_found = True
-            for contribution in member['contributions']:
-                total += contribution['amount']
-            if total > 0:
-                print(f"Member \t\tTotal Contributed \n{member['name']} \t\tR{total:,.2f}")
-            else:
-                print(f"{member['name']} has not made any contributions yet!")
-    if member_found == False:
+    member_id = input(f"Enter the member ID: ").strip().capitalize()
+    member = find_member(member_id)
+    total = 0
+    if member:
+        for contribution in member['contributions']:
+            total += contribution['amount']
+        if total > 0:
+            print(f"Member \t\tTotal Contributed \n{member['name']} \t\tR{total:,.2f}")
+        else:
+            print(f"{member['name']} has not made any contributions yet!")
+    else:
         print("Please enter an existing member ID")
 
 def calc_group_total():
-    group_total = []
+    group_total = 0
     for member in members:
         for contribution in member['contributions']:
-            group_total.append(contribution['amount'])
-    print(f"Group total: R{sum(group_total):,.2f}")
+            group_total += contribution['amount']
+    print(f"Group total: R{group_total:,.2f}")
+
+def has_members():
+    return len(members) > 0
+
+def print_separator():
+    print("-" * 35)
 
 while True:
     #Prompt user to select option from the menu
@@ -84,46 +87,37 @@ while True:
             add_member()
 
         elif option == 2:
-            if len(members) > 0:
+            if has_members():
                 print("Members")
-                i = 0
-                while i < 20:
-                    print("-", end='')
-                    i += 1
+                print_separator()
                 view_member()
             else:
                 print("No member has been added yet!")
 
         elif option == 3:
-            if len(members) > 0:
+            if has_members():
                 print("Available members:")
-                i = 0
-                while i < 20:
-                    print("-", end='')
-                    i += 1
+                print_separator()
                 record_contribution()
             else:
                 print("No member has been added yet!")
 
         elif option == 4:
-            if len(members) > 0:
+            if has_members():
                 view_contributions()
             else:
                 print("No member has been added yet!")
 
         elif option == 5:
-            if len(members) > 0:
+            if has_members():
                 print("Available members:")
-                i = 0
-                while i < 20:
-                    print("-", end='')
-                    i += 1
+                print_separator()
                 calc_member_total()
             else:
                 print("No member has been added yet!")
 
-        elif option ==  6:
-            if len(members) > 0:
+        elif option == 6:
+            if has_members():
              calc_group_total()
             else:
                 print("No member has been added yet!")
