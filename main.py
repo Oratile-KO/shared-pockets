@@ -1,149 +1,227 @@
-from datetime import date
-import json
+from datetime import datetime
+import sqlite3
 
-#Load the saved JSON file
-def load_data():
-    try:
-        with open('members.json', 'r') as file:
-            return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-#Declare and Initialize the members list
-members = load_data()
-        
-#Create function to add member
-def add_member():
+def add_member(conn):
     prefix  = 'M'
-    suffix = 1
     name = input("Enter member name: ").strip().capitalize()
+    if not name:
+        print("Name cannot be empty!")
+        return
     #Generate ID
-    suffix += len(members)
-    member_id = prefix  + f"{suffix:03}"
-    new_member = {'name': name, 'member_id': member_id, 'contributions':  []}  #Add new member to list
-    members.append(new_member)
-    print(f"{name} added successfully! Member ID: {member_id}")
-    save_data()
-
-#Display the members and their member ID's
-def view_member():
-    for member in members:
-        print(f"{member['member_id']} {member['name']}")
-
-def find_member(member_id):
-    for member in members:
-        if member['member_id'] == member_id:
-            return member
-    return None
- 
-def record_contribution():
-    today = date.today()
-    view_member()   
-    member_id = input("Enter member ID: ").strip().capitalize()
-    member = find_member(member_id)
-    if member:
-            try: 
-                amount = float(input(f"Enter amount member is contributing: ").strip()) 
-                if amount <= 0:
-                    print("Enter amount greater that 0")
-                else:
-                    new_contribution = {'amount': amount, 'date': today.strftime("%d/%b/%Y")}
-                    member['contributions'].append(new_contribution)
-                    save_data()
-            except ValueError: 
-                print("Please enter a valid amount!")
+    cursor = conn.execute("""
+        SELECT MAX(CAST(SUBSTR(member_id, 2) AS INTEGER))
+        FROM members
+    """)
+    result = cursor.fetchone()
+    if result[0] is None:
+        max_number = 0
     else:
-        print(f"Member ID '{member_id}' does not exist! Please try again.")
+        max_number = result[0]
+    member_id = prefix  + f"{max_number + 1:03}"
+    date_joined = input("Enter date joined (YYYY-MM-DD): ")
+    try:
+        datetime.strptime(date_joined, "%Y-%m-%d")
+    except ValueError:
+        print("Invalid date. Use YYYY-MM-DD.")
+        return
 
-def view_contributions():
-    print("Contributions")
-    print_separator()
-    for member in members:
-        for contribution in member['contributions']:
-            print(f"Date \t\tMember \t\tAmount \n{contribution['date']} \t{member['name']} \t\tR{contribution['amount']:,.2f}")
+    conn.execute("""
+        INSERT INTO members (member_id, name, date_joined)
+        VALUES (?, ?, ?)
+    """, (member_id, name, date_joined))
 
-def calc_member_total():
-    view_member()
-    member_id = input(f"Enter the member ID: ").strip().capitalize()
-    member = find_member(member_id)
-    total = 0
-    if member:
-        for contribution in member['contributions']:
-            total += contribution['amount']
-        if total > 0:
-            print(f"Member \t\tTotal Contributed \n{member['name']} \t\tR{total:,.2f}")
-        else:
-            print(f"{member['name']} has not made any contributions yet!")
+    conn.commit()
+    print("Member successfully added!")
+
+def view_members(conn):
+    cursor = conn.execute("SELECT * FROM members")
+    print(f"{'Member ID':<13}{'Name':<15}")
+    for row in cursor:
+        member_id = row[1]
+        name = row[2]
+        print(f"{member_id:<13}{name:<15}")
+
+def add_contribution(conn):
+    member_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
+    if not member_id:
+        print("Member ID cannot be empty! Please try again.")
+        return
+    cursor = conn.execute(
+        "SELECT id FROM members WHERE member_id = ?",
+        (member_id,)
+    )
+    result = cursor.fetchone()
+    if result is None:
+        print("Member ID not found! Please try again.")
+        return
+    member_id = result[0]
+    try:
+        amount = float(input(f"Enter amount member is contributing: ").strip()) 
+        if amount <= 0:
+                print("Enter amount greater that 0")
+                return
+    except ValueError:
+            print("Please enter a valid amount!")
+            return
+
+    conn.execute("""
+        INSERT INTO contributions (member_id, amount, date)
+        VALUES (?, ?, ?)
+        """, (member_id, amount, datetime.now().strftime("%Y-%m-%d")))
+
+    conn.commit()
+    print("Contribution added successfully!")
+
+def view_contributions(conn):
+    cursor = conn.execute("""
+            SELECT members.member_id, members.name, contributions.amount, contributions.date
+            FROM members
+            INNER JOIN contributions
+                ON members.id = contributions.member_id;
+                    """)
+    print(f"{'Member ID':<12}{'Name':<15}{'Amount':<13}{'Date':<12}")
+    for row in cursor:
+        member_id = row[0]
+        name = row[1]
+        amount = row[2]
+        date = row[3]
+        print(f"{member_id:<12}{name:<15}R{amount:<12,.2f}{date:<12}")
+
+def calc_member_total(conn):
+    member_id = input("Enter Member ID: ").strip().capitalize()
+    if not member_id:
+        print("Member ID cannot be empty! Please try again.")
+        return
+    cursor = conn.execute("""
+                SELECT members.member_id, members.name, SUM(contributions.amount) as member_total 
+                FROM members
+                LEFT JOIN contributions
+	                ON members.id = contributions.member_id
+                WHERE members.member_id = ?
+                GROUP BY members.id
+                        """, (member_id,))
+    result = cursor.fetchone()
+    if result is None:
+        print(f"Member '{member_id}' does not exist!")
+
+    elif result[2] is None:
+        print(f"{result[1]} has not made any contributions yet.")
+
     else:
-        print("Please enter an existing member ID")
+        print(f"The total for {result[1]} is R{result[2]:,.2f}")
 
-def calc_group_total():
-    group_total = 0
-    for member in members:
-        for contribution in member['contributions']:
-            group_total += contribution['amount']
-    print(f"Group total: R{group_total:,.2f}")
-
-def has_members():
-    return len(members) > 0
+def calc_group_total(conn):
+    cursor = conn.execute("SELECT SUM(amount) FROM contributions")
+    result = cursor.fetchone()
+    if result[0] is None:
+        print("No contributions have been made yet.")
+        return
+    else:
+        print(f"The total group contribution is R{result[0]:,.2f}")
 
 def print_separator():
     print("-" * 35)
 
-def save_data():
-    with open('members.json', 'w') as file:
-        json.dump(members, file)
+def has_members(conn):
+    cursor = conn.execute("""
+        SELECT EXISTS (
+            SELECT 1 FROM members
+        )
+    """)
+    return cursor.fetchone()[0]
 
-while True:
-    #Prompt user to select option from the menu
-    try:
-        option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total \n7. Close\n").strip())
+#create sqlite members table
+try:
+    with sqlite3.connect("shared_pockets.db") as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS members (
+                id INTEGER PRIMARY KEY,
+                member_id TEXT UNIQUE,
+                name TEXT NOT NULL,
+                date_joined DATE NOT NULL
+            );
+        """)
+        conn.execute("""
+                    CREATE TABLE IF NOT EXISTS contributions (
+                    id INTEGER PRIMARY KEY,
+                    member_id INTEGER,
+                    amount REAL NOT NULL,
+                    date DATE NOT NULL,
+                    FOREIGN KEY (member_id) REFERENCES members(id)
+            );
+                """)
 
-        if option == 1:
-            add_member()
+        # Print members
+        cursor = conn.execute("SELECT * FROM members")
+        print("MEMBERS:")
+        for row in cursor:
+            name = row[2]
+            print(name)
 
-        elif option == 2:
-            if has_members():
-                print("Members")
-                print_separator()
-                view_member()
-            else:
-                print("No member has been added yet!")
+        # Print contributions
+        cursor = conn.execute("SELECT * FROM contributions")
+        print("\nCONTRIBUTIONS:")
+        for row in cursor:
+            print(row)
 
-        elif option == 3:
-            if has_members():
-                print("Available members:")
-                print_separator()
-                record_contribution()
-            else:
-                print("No member has been added yet!")
+        while True:
+            #Prompt user to select option from the menu
+            try:
+                option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total \n7. Close\n").strip())
 
-        elif option == 4:
-            if has_members():
-                view_contributions()
-            else:
-                print("No member has been added yet!")
+                if option == 1:
+                    add_member(conn)
 
-        elif option == 5:
-            if has_members():
-                print("Available members:")
-                print_separator()
-                calc_member_total()
-            else:
-                print("No member has been added yet!")
+                elif option == 2:
+                    if has_members(conn):
+                        print("Members")
+                        print_separator()
+                        view_members(conn)
+                    else:
+                        print("No member has been added yet.")
 
-        elif option == 6:
-            if has_members():
-             calc_group_total()
-            else:
-                print("No member has been added yet!")
+                elif option == 3:
+                    if has_members(conn):
+                        print("Available members:")
+                        print_separator()
+                        view_members(conn)
+                        add_contribution(conn) 
+                    else:
+                        print("No member has been added yet.")
 
-        elif option == 7:
-            save_data()
-            print("Goodbye!")
-            break
+                elif option == 4:
+                    if has_members(conn):
+                        view_contributions(conn)
+                    else:
+                        print("No member has been added yet.")
 
-        else:
-            print("Invalid selection! Please try again.")
+                elif option == 5:
+                    if has_members(conn):
+                        print("Available members:")
+                        print_separator()
+                        view_members(conn)
+                        calc_member_total(conn)
+                    else:
+                        print("No member has been added yet.")
 
-    except ValueError:
-        print("Invalid selection! Please try again.")
+                elif option == 6:
+                    calc_group_total(conn)
+
+                elif option == 7:
+                    print("Goodbye!")
+                    break
+
+                else:
+                    print("Invalid selection! Please try again.")
+                    
+            except ValueError:
+                    print("Invalid selection! Please try again.")
+
+except sqlite3.IntegrityError as e:
+    if "UNIQUE constraint failed" in str(e):
+        print("Member ID already exists. Please use a different member ID.")
+    elif "FOREIGN KEY constraint failed" in str(e):
+        print("That member does not exist.")
+    else:
+        print(f"Database Error: {e}")
