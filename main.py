@@ -121,7 +121,7 @@ def calc_group_total(conn):
         print(f"The total group contribution is R{result[0]:,.2f}")
 
 def print_separator():
-    print("-" * 35)
+    print("-" * 75)
 
 def has_members(conn):
     cursor = conn.execute("""
@@ -310,7 +310,33 @@ def add_loan(conn):
         except ValueError:
             print("Invalid selection, please enter either '1' or '2'!")
             continue
-        break       
+        break
+
+def view_loans(conn):
+   cursor = conn.execute("""
+                SELECT loans.loan_id as "Loan ID", 
+                    CASE
+                        WHEN loans.borrower_type = 'member' THEN members.name
+                        ELSE borrowers.name
+                    END AS "Borrower", 
+                loans.borrower_type as "Type", loans.amount as "Amount", loans.date_issued as "Date", loans.status as "Status"
+                FROM loans
+                LEFT JOIN members
+                    ON loans.member_id = members.id
+                LEFT JOIN borrowers
+                    ON loans.borrower_id = borrowers.id
+                """)
+   print(f"{'Loan ID':<9}{'Borrower':<15}{'Type':<12}{'Amount':<16}{'Date':<15}{'Status':<6}")
+   print_separator()
+   for row in cursor:
+       loan_id = row[0]
+       name = row[1]
+       borrower_type = row[2]
+       amount = row[3]
+       date = row[4]
+       status = row[5]
+       print(f"{loan_id:<9}{name:<15}{borrower_type:<12}R{amount:<15,.2f}{date:<15}{status:<6}")
+
 #create sqlite members table
 try:
     with sqlite3.connect("shared_pockets.db") as conn:
@@ -451,8 +477,11 @@ try:
                         add_loan(conn)
                     #else:
                       #  print("No contributions have been made yet!")
-
+                
                 elif option == 8:
+                    view_loans(conn)
+
+                elif option == 9:
                     print("Goodbye!")
                     break
 
