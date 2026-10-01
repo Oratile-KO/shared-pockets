@@ -37,9 +37,9 @@ def view_members(conn):
     cursor = conn.execute("SELECT * FROM members")
     print(f"{'ID':<7}{'Member ID':<13}{'Name':<15}")
     for row in cursor:
-        id = row[0]
-        member_id = row[1]
-        name = row[2]
+        id = row["id"]
+        member_id = row["member_id"]
+        name = row["name"]
         print(f"{id:<7}{member_id:<13}{name:<15}")
 
 def add_contribution(conn):
@@ -134,7 +134,7 @@ def has_members(conn):
 def add_loan(conn):
     while True:
         try:
-            borrower_choice = int(input("Please select borrower type: \n1. Member \n2. External\n").strip())
+            borrower_choice = int(input("Please select borrower type: \n1. Member \n2. External Borrower\n").strip())
             if borrower_choice == 1:
                 borrower_type = 'member'
                 break
@@ -212,10 +212,22 @@ def add_loan(conn):
                                 if amount <= 0:
                                     print("Amount cannot be below R1, please try again!")
                                 else:
+                                    #Generate Borrower ID
+                                    prefix  = 'B'
                                     cursor = conn.execute("""
-                                                INSERT INTO borrowers(name)
-                                                VALUES(?)
-                                            """, (name,))
+                                        SELECT MAX(CAST(SUBSTR(borrower_id, 2) AS INTEGER))
+                                        FROM borrowers
+                                    """)
+                                    result = cursor.fetchone()
+                                    if result[0] is None:
+                                        max_number = 0
+                                    else:
+                                        max_number = result[0]
+                                    borrower_id = prefix  + f"{max_number + 1:03}"
+                                    cursor = conn.execute("""
+                                            INSERT INTO borrowers(name, borrower_id)
+                                            VALUES(?, ?)
+                                            """, (name, borrower_id ))
                                     borrower_db_id = cursor.lastrowid
 
                                     #Generate Loan ID
@@ -290,7 +302,6 @@ def add_loan(conn):
                                             else:
                                                 max_number = result[0]
                                             loan_id = prefix  + f"{max_number + 1:03}"
-                                            print(loan_id)
                                             date_issued = datetime.now().strftime("%Y-%m-%d")
 
                                             conn.execute("""
@@ -329,17 +340,329 @@ def view_loans(conn):
    print(f"{'Loan ID':<9}{'Borrower':<15}{'Type':<12}{'Amount':<16}{'Date':<15}{'Status':<6}")
    print_separator()
    for row in cursor:
-       loan_id = row[0]
-       name = row[1]
-       borrower_type = row[2]
-       amount = row[3]
-       date = row[4]
-       status = row[5]
+       loan_id = row["Loan ID"]
+       name = row["Borrower"]
+       borrower_type = row["Type"]
+       amount = row["Amount"]
+       date = row["Date"]
+       status = row["Status"]
        print(f"{loan_id:<9}{name:<15}{borrower_type:<12}R{amount:<15,.2f}{date:<15}{status:<6}")
+
+def add_repayment(conn):
+    while True:
+        try:
+            borrower_type = int(input("Select payment type: \n1. Member Repayment \n2. External Borrower Repayment \n3. Close\n").strip())
+            if borrower_type == 1:
+                cursor = conn.execute("""
+                        SELECT  id as 'db_id', member_id as 'member_id', members.name as 'name'
+                        FROM members
+                        WHERE EXISTS (
+                            SELECT 1
+                            FROM loans
+                            LEFT JOIN repayment_allocations
+                                on loans.id = repayment_allocations.loan_id
+                            WHERE loans.member_id = members.id
+                            GROUP BY loans.id, loans.amount
+                            HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                            )
+                    """)
+                members = cursor.fetchall()
+                if not members:
+                    print("There are no members with outstanding loans.")
+                    continue
+                else:  
+                    print(f"AVAILABLE MEMBERS: \n{'Member ID':<13}{'Name':<17}")
+                    for row in members:
+                        member_id = row['member_id']
+                        name = row['name']
+                        print(f"{member_id:<13}{name:<17}")
+                while True:
+                    member_id = input("Enter Member ID: ").strip().capitalize()
+                    if not member_id:
+                        print("Member ID cannot be blank!")
+                        continue
+                    else:
+                        cursor = conn.execute("""
+                                        SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date', members.id as 'db_id', members.name as 'name'
+                                        FROM loans
+                                        JOIN members    
+                                            ON loans.member_id = members.id
+                                        LEFT JOIN repayment_allocations
+                                            ON loans.id = repayment_allocations.loan_id	
+                                        WHERE members.member_id = ?
+                                        GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
+                                        HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                                        ORDER BY loans.date_issued ASC, loans.id ASC    
+                                            """, (member_id,))
+                        member = cursor.fetchall()
+                        if not member:
+                            print(f"Member ID '{member_id}' has no outstanding loans, please try again!")
+                            continue
+                        else:
+                            for id in member:
+                                member_db_id = id["db_id"]
+                            cursor = conn.execute("""
+                                        SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date'
+                                        FROM loans
+                                        JOIN members
+                                            ON loans.member_id = members.id
+                                        LEFT JOIN repayment_allocations
+                                            ON loans.id = repayment_allocations.loan_id	
+                                        WHERE members.id = ?
+                                        GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
+                                        HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                                        ORDER BY loans.date_issued ASC, loans.id ASC
+                                            """, (member_db_id,))
+                            print(f"{'Loan Id':<10}{'Original':<17}{'Repaid':<19}{'Outstanding':<17}{'Date':<17}")
+                            print_separator()
+                            member_outstanding_balance = 0
+                            for member_loan in cursor:
+                                loan_id = member_loan["loan_id"]
+                                original_loan_amount = member_loan["original"]
+                                repaid_amount = member_loan["repaid"]
+                                outstanding_amount = member_loan["outstanding"]
+                                member_outstanding_balance += outstanding_amount
+                                date_issued = member_loan["date"]
+                                print(f"{loan_id:<10}R{original_loan_amount:<17,.2F}R{repaid_amount:<17,.2F}R{outstanding_amount:<17,.2F}{date_issued:<17}")
+                            while True:
+                                try:
+                                    for member_name in member:
+                                        loan_borrower = member_name["name"]
+                                    repayment_amount = float(input(f"Enter amount {loan_borrower} is repaying: ").strip())
+                                    if repayment_amount < 1:
+                                        print("Repayment amount cannot be below R1!, please try again!")
+                                        continue
+                                    elif repayment_amount > member_outstanding_balance:
+                                        print(f"Repayment amount cannot be higher than R{member_outstanding_balance:,.2f}, please try again!")
+                                        continue
+                                    else:
+                                        remaining_payment = repayment_amount
+                                        allocations = []
+
+                                        for loan in member:
+                                            outstanding = loan["outstanding"]
+
+                                            if remaining_payment >= outstanding:
+                                                repaid_amount = outstanding
+                                                remaining_payment -= outstanding 
+                                            else:
+                                                repaid_amount = remaining_payment
+                                                remaining_payment -= remaining_payment
+
+                                            recorded_allocations = (loan["loan_id"], repaid_amount)
+                                            allocations.append(recorded_allocations)
+
+                                            if  remaining_payment == 0:
+                                                break
+                                        
+                                        date_paid = datetime.now().strftime("%Y-%m-%d")
+                                        cursor = conn.execute("""
+                                            INSERT INTO repayments(amount, date)
+                                            VALUES(?, ?)
+                                        """, (repayment_amount, date_paid,))
+
+                                        repayment_db_id = cursor.lastrowid
+
+                                        for allocation in allocations:
+                                            allocation_loan_id, allocation_repaid_amount = allocation
+
+                                            cursor = conn.execute("""
+                                                SELECT id as "db_id"
+                                                FROM loans
+                                                WHERE loan_id = ?
+                                            """, (allocation_loan_id,))
+
+                                            loan = cursor.fetchone()
+                                            loan_db_id = loan["db_id"]
+
+                                            conn.execute("""
+                                                INSERT INTO repayment_allocations(repayment_id, loan_id, amount)
+                                                VALUES(?, ?, ?)
+                                            """, (repayment_db_id, loan_db_id, allocation_repaid_amount))
+                                        conn.commit()
+                                        print("Repayment amount accepted!")
+                                except ValueError:
+                                    print("Invalid amount, please try again")
+                                    continue
+                                break 
+                            break
+                        
+            elif borrower_type == 2:
+                    cursor = conn.execute("""
+                            SELECT  id as 'db_id', borrower_id as 'borrower_id', name as 'name'
+                            FROM borrowers
+                            WHERE EXISTS (
+                                SELECT 1
+                                FROM loans
+                                LEFT JOIN repayment_allocations
+                                    on loans.id = repayment_allocations.loan_id
+                                WHERE loans.borrower_id = borrowers.id
+                                GROUP BY loans.id, loans.amount
+                                HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                                )
+                        """)
+                    borrowers = cursor.fetchall()
+                    if not borrowers:
+                        print("There are no borrowers with outstanding loans.")
+                        continue
+                    else:  
+                        print(f"AVAILABLE BORROWERS: \n{'borrower ID':<13}{'Name':<17}")
+                        for row in borrowers:
+                            borrower_id = row['borrower_id']
+                            name = row['name']
+                            print(f"{borrower_id:<13}{name:<17}")
+                    while True:
+                        borrower_id = input("Enter borrower ID: ").strip().capitalize()
+                        if not borrower_id:
+                            print("borrower ID cannot be blank!")
+                            continue
+                        else:
+                            cursor = conn.execute("""
+                                            SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date', borrowers.id as 'db_id', borrowers.name as 'name'
+                                            FROM loans
+                                            JOIN borrowers
+                                                ON loans.borrower_id = borrowers.id
+                                            LEFT JOIN repayment_allocations
+                                                ON loans.id = repayment_allocations.loan_id	
+                                            WHERE borrowers.borrower_id = ?
+                                            GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
+                                            HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                                            ORDER BY loans.date_issued ASC, loans.id ASC    
+                                                """, (borrower_id,))
+                            borrower = cursor.fetchall()
+                            if not borrower:
+                                print(f"borrower ID '{borrower_id}' has no outstanding loans, please try again!")
+                                continue
+                            else:
+                                for id in borrower:
+                                    borrower_db_id = id["db_id"]
+                                cursor = conn.execute("""
+                                            SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date'
+                                            FROM loans
+                                            JOIN borrowers
+                                                ON loans.borrower_id = borrowers.id
+                                            LEFT JOIN repayment_allocations
+                                                ON loans.id = repayment_allocations.loan_id	
+                                            WHERE borrowers.id = ?
+                                            GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
+                                            HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                                            ORDER BY loans.date_issued ASC, loans.id ASC
+                                                """, (borrower_db_id,))
+                                print(f"{'Loan Id':<10}{'Original':<17}{'Repaid':<19}{'Outstanding':<17}{'Date':<17}")
+                                print_separator()
+                                borrower_outstanding_balance = 0
+                                for borrower_loan in cursor:
+                                    loan_id = borrower_loan["loan_id"]
+                                    original_loan_amount = borrower_loan["original"]
+                                    repaid_amount = borrower_loan["repaid"]
+                                    outstanding_amount = borrower_loan["outstanding"]
+                                    borrower_outstanding_balance += outstanding_amount
+                                    date_issued = borrower_loan["date"]
+                                    print(f"{loan_id:<10}R{original_loan_amount:<17,.2F}R{repaid_amount:<17,.2F}R{outstanding_amount:<17,.2F}{date_issued:<17}")
+                                while True:
+                                    try:
+                                        for borrower_name in borrower:
+                                            loan_borrower = borrower_name["name"]
+                                        repayment_amount = float(input(f"Enter amount {loan_borrower} is repaying: ").strip())
+                                        if repayment_amount < 1:
+                                            print("Repayment amount cannot be below R1!, please try again!")
+                                            continue
+                                        elif repayment_amount > borrower_outstanding_balance:
+                                            print(f"Repayment amount cannot be higher than R{borrower_outstanding_balance:,.2f}, please try again!")
+                                            continue
+                                        else:
+                                            remaining_payment = repayment_amount
+                                            allocations = []
+                    
+                                            for loan in borrower:
+                                                outstanding = loan["outstanding"]
+                    
+                                                if remaining_payment >= outstanding:
+                                                    repaid_amount = outstanding
+                                                    remaining_payment -= outstanding 
+                                                else:
+                                                    repaid_amount = remaining_payment
+                                                    remaining_payment -= remaining_payment
+                    
+                                                recorded_allocations = (loan["loan_id"], repaid_amount)
+                                                allocations.append(recorded_allocations)
+                    
+                                                if  remaining_payment == 0:
+                                                    break
+                    
+                                            date_paid = datetime.now().strftime("%Y-%m-%d")
+                                            cursor = conn.execute("""
+                                                INSERT INTO repayments(amount, date)
+                                                VALUES(?, ?)
+                                            """, (repayment_amount, date_paid,))
+                    
+                                            repayment_db_id = cursor.lastrowid
+                    
+                                            for allocation in allocations:
+                                                allocation_loan_id, allocation_repaid_amount = allocation
+                    
+                                                cursor = conn.execute("""
+                                                    SELECT id as "db_id"
+                                                    FROM loans
+                                                    WHERE loan_id = ?
+                                                """, (allocation_loan_id,))
+                    
+                                                loan = cursor.fetchone()
+                                                loan_db_id = loan["db_id"]
+                    
+                                                conn.execute("""
+                                                    INSERT INTO repayment_allocations(repayment_id, loan_id, amount)
+                                                    VALUES(?, ?, ?)
+                                                """, (repayment_db_id, loan_db_id, allocation_repaid_amount))
+                                            conn.commit()
+                                            print("Repayment amount accepted!")
+                                    except ValueError:
+                                        print("Invalid amount, please try again")
+                                        continue
+                                    break 
+                                break
+            elif borrower_type == 3:
+                break
+            else:
+                print("Invalid selection, please try again!")
+                continue
+
+        except ValueError:
+            print("Invalid input, please try again!")
+            continue
+        break
+    
+def view_repayment_allocations(conn):
+    cursor = conn.execute("""
+                    SELECT id as "db_id", repayment_id as "repayment_id", loan_id as "loan_id", amount as "amount"
+                    FROM repayment_allocations
+                """)
+    repayment_allocation = cursor.fetchall()
+    print(f"{'db_id':<10}{'repayment_id':<17}{'loan_id':<15}{'amount':<17}")
+    for allocation in repayment_allocation:
+        db_id = allocation["db_id"]
+        repayment_id = allocation["repayment_id"]
+        loan_id = allocation["loan_id"]
+        amount = allocation["amount"]
+        print(f"{db_id:<10}{repayment_id:<17}{loan_id:<15}{amount:<17,.2f}")
+
+def view_repayments(conn):
+    cursor = conn.execute("""
+                    SELECT id as "db_id", amount as "amount", date as "date"
+                    FROM repayments
+                """)
+    repayment = cursor.fetchall()
+    print(f"{'db_id':<10}{'amount':<17}{'date'}")
+    for payment in repayment:
+        db_id = payment["db_id"]
+        amount = payment["amount"]
+        date = payment["date"]
+        print(f"{db_id:<10}{amount:<17,.2f}{date:<17}")
 
 #create sqlite members table
 try:
     with sqlite3.connect("shared_pockets.db") as conn:
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS members (
@@ -361,6 +684,7 @@ try:
         conn.execute("""
                     CREATE TABLE IF NOT EXISTS borrowers (
                     id INTEGER PRIMARY KEY,
+                    borrower_id TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL
             );
         """)
@@ -408,8 +732,16 @@ try:
         # Print members
         cursor = conn.execute("SELECT * FROM loans")
         print("LOANS:")
-        for row in cursor:
-            print(row)
+        # for row in cursor:
+        #     db_id
+        #     loan_id
+        #     member_id
+        #     amount
+        #     borrower_type
+        #     date_isssued
+        #     borrower_id
+        #     status
+
         
         # Print members
         cursor = conn.execute("SELECT * FROM members")
@@ -432,7 +764,7 @@ try:
         while True:
             #Prompt user to select option from the menu
             try:
-                option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total \n7. Add loan \n8. Close\n").strip())
+                option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total \n7. Add loan \n8. View loans \n9. Add Repayment \n10. View repayment allocations \n11. Close \n").strip())
 
                 if option == 1:
                     add_member(conn)
@@ -481,7 +813,14 @@ try:
                 elif option == 8:
                     view_loans(conn)
 
-                elif option == 9:
+                elif  option == 9:
+                    add_repayment(conn)
+
+                elif  option == 10:
+                    view_repayment_allocations(conn)
+                    view_repayments(conn)
+
+                elif option == 11:
                     print("Goodbye!")
                     break
 
