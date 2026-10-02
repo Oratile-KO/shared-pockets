@@ -198,7 +198,7 @@ def add_loan(conn):
     if borrower_type == 'external':
        while True:
         try:
-            external_type = int(input("Is the external borrower new or existing? \n1. New \n2. Existing\n").strip())
+            external_type = int(input("Is the external borrower new or existing? \n1. New Borrower \n2. Existing Borrower \n").strip())
             if external_type == 1:
                 while True:
                     name = input("Enter borrower name: ").strip().capitalize()
@@ -242,7 +242,6 @@ def add_loan(conn):
                                     else:
                                         max_number = result[0]
                                     loan_id = prefix  + f"{max_number + 1:03}"
-                                    print(loan_id)
                                     date_issued = datetime.now().strftime("%Y-%m-%d")
 
                                     conn.execute("""
@@ -250,9 +249,6 @@ def add_loan(conn):
                                                 VALUES(?, ?, ?, ?, ?, 'open')
                                             """, (borrower_db_id, borrower_type, amount, loan_id,date_issued))
                                     conn.commit()
-                                    result = conn.execute("SELECT * FROM loans")
-                                    for row in result:
-                                        print(row)
                                     break
                             except ValueError:
                                 print("Invalid amount! Please try again.")
@@ -309,9 +305,6 @@ def add_loan(conn):
                                                         VALUES(?, ?, ?, ?, ?, 'open')
                                                     """, (borrower_db_id, borrower_type, amount, loan_id,date_issued))
                                             conn.commit()
-                                            result = conn.execute("SELECT * FROM loans")
-                                            for row in result:
-                                                print(row)
                                             break
                                     except ValueError:
                                         print("Invalid amount, please try again!")
@@ -347,6 +340,20 @@ def view_loans(conn):
        date = row["Date"]
        status = row["Status"]
        print(f"{loan_id:<9}{name:<15}{borrower_type:<12}R{amount:<15,.2f}{date:<15}{status:<6}")
+
+def update_loan_status(conn):
+    conn.execute("""
+                UPDATE loans
+                SET status = 'closed'
+                WHERE amount - COALESCE(
+                (
+                    SELECT SUM(repayment_allocations.amount)
+                    FROM repayment_allocations
+                    WHERE repayment_allocations.loan_id = loans.id
+                    ),
+                    0
+                ) = 0;
+            """)
 
 def add_repayment(conn):
     while True:
@@ -455,11 +462,24 @@ def add_repayment(conn):
                                             if  remaining_payment == 0:
                                                 break
                                         
-                                        date_paid = datetime.now().strftime("%Y-%m-%d")
+                                        #Generate Repayment ID
+                                        prefix  = 'R'
                                         cursor = conn.execute("""
-                                            INSERT INTO repayments(amount, date)
-                                            VALUES(?, ?)
-                                        """, (repayment_amount, date_paid,))
+                                                SELECT MAX(CAST(SUBSTR(loan_id, 2) AS INTEGER))
+                                                FROM repayments
+                                            """)
+                                        result = cursor.fetchone()
+                                        if result[0] is None:
+                                            max_number = 0
+                                        else:
+                                            max_number = result[0]
+                                        repaymend_id = prefix  + f"{max_number + 1:03}"
+                                        date_paid = datetime.now().strftime("%Y-%m-%d")
+                                        
+                                        cursor = conn.execute("""
+                                                INSERT INTO repayments(amount, repayment_id, date)
+                                                VALUES(?, ?, ?)
+                                            """, (repayment_amount, repaymend_id, date_paid,))
 
                                         repayment_db_id = cursor.lastrowid
 
@@ -479,6 +499,7 @@ def add_repayment(conn):
                                                 INSERT INTO repayment_allocations(repayment_id, loan_id, amount)
                                                 VALUES(?, ?, ?)
                                             """, (repayment_db_id, loan_db_id, allocation_repaid_amount))
+                                        update_loan_status(conn)
                                         conn.commit()
                                         print("Repayment amount accepted!")
                                 except ValueError:
@@ -589,12 +610,25 @@ def add_repayment(conn):
                     
                                                 if  remaining_payment == 0:
                                                     break
-                    
-                                            date_paid = datetime.now().strftime("%Y-%m-%d")
+
+                                            #Generate Repayment ID
+                                            prefix  = 'R'
                                             cursor = conn.execute("""
-                                                INSERT INTO repayments(amount, date)
-                                                VALUES(?, ?)
-                                            """, (repayment_amount, date_paid,))
+                                                SELECT MAX(CAST(SUBSTR(loan_id, 2) AS INTEGER))
+                                                FROM repayments
+                                            """)
+                                            result = cursor.fetchone()
+                                            if result[0] is None:
+                                                max_number = 0
+                                            else:
+                                                max_number = result[0]
+                                            repaymend_id = prefix  + f"{max_number + 1:03}"
+                                            date_paid = datetime.now().strftime("%Y-%m-%d")
+
+                                            cursor = conn.execute("""
+                                                INSERT INTO repayments(amount, repayment_id, date)
+                                                VALUES(?, ?, ?)
+                                            """, (repayment_amount, repaymend_id, date_paid,))
                     
                                             repayment_db_id = cursor.lastrowid
                     
@@ -614,6 +648,7 @@ def add_repayment(conn):
                                                     INSERT INTO repayment_allocations(repayment_id, loan_id, amount)
                                                     VALUES(?, ?, ?)
                                                 """, (repayment_db_id, loan_db_id, allocation_repaid_amount))
+                                            update_loan_status(conn)
                                             conn.commit()
                                             print("Repayment amount accepted!")
                                     except ValueError:
@@ -631,33 +666,66 @@ def add_repayment(conn):
             print("Invalid input, please try again!")
             continue
         break
-    
-def view_repayment_allocations(conn):
-    cursor = conn.execute("""
-                    SELECT id as "db_id", repayment_id as "repayment_id", loan_id as "loan_id", amount as "amount"
-                    FROM repayment_allocations
-                """)
-    repayment_allocation = cursor.fetchall()
-    print(f"{'db_id':<10}{'repayment_id':<17}{'loan_id':<15}{'amount':<17}")
-    for allocation in repayment_allocation:
-        db_id = allocation["db_id"]
-        repayment_id = allocation["repayment_id"]
-        loan_id = allocation["loan_id"]
-        amount = allocation["amount"]
-        print(f"{db_id:<10}{repayment_id:<17}{loan_id:<15}{amount:<17,.2f}")
 
 def view_repayments(conn):
     cursor = conn.execute("""
-                    SELECT id as "db_id", amount as "amount", date as "date"
+                    SELECT repayment_id as "repayment_id", amount as "amount", date as "date"
                     FROM repayments
                 """)
-    repayment = cursor.fetchall()
-    print(f"{'db_id':<10}{'amount':<17}{'date'}")
-    for payment in repayment:
-        db_id = payment["db_id"]
+    repayments = cursor.fetchall()
+    print(f"{'Repayment ID':<15}{'Date':<17}{'Amount'}")
+    for payment in repayments:
+        repayment_id = payment["repayment_id"]
         amount = payment["amount"]
         date = payment["date"]
-        print(f"{db_id:<10}{amount:<17,.2f}{date:<17}")
+        print(f"{repayment_id:<15}{date:<17}R{amount:<17,.2f}")
+
+    while True:
+        try:
+            option = int(input("\nWould you like to see allocations for a particular repayment? \n1. Yes \n2. No \n").strip())
+
+            if option == 1:
+                while True:
+                    selected_id = input("Enter the Repayment ID: ").strip().capitalize()
+
+                    cursor = conn.execute("""
+                            SELECT loans.loan_id as "loan_id", repayment_allocations.amount as "amount", repayments.repayment_id as "repayment_id", repayments.amount as "repayment_amount", repayments.date as "date"
+                            FROM repayment_allocations
+                            JOIN loans
+                                ON repayment_allocations.loan_id = loans.id
+                            JOIN repayments
+                                ON repayment_allocations.repayment_id = repayments.id
+                            WHERE repayments.repayment_id = ?
+                    """, (selected_id,))
+
+                    allocations = cursor.fetchall()
+
+                    if not allocations:
+                        print(f"Repayment ID '{selected_id}' does not exist, please try again!")
+                        continue
+                    else:
+                        repayment_amount = allocations[0]["repayment_amount"]
+                        date_paid = allocations[0]["date"]
+
+                        print(f"Repayment: R{repayment_amount:<,.2f} \nDate: {date_paid} \n")
+
+                        print(f"{'Loan ID':<10}{'Amount'}")
+                        for allocation in allocations:
+                            loan_id = allocation["loan_id"]
+                            amount = allocation["amount"]
+                            print(f"{loan_id:<10}R{amount:<17,.2f}")
+                    break
+                break
+            if option == 2:
+                break
+            else:
+                print("Invalid selection, please try again!")
+        except ValueError:
+            print("Please enter either '1' or '2'!")
+            continue
+        break
+
+
 
 #create sqlite members table
 try:
@@ -714,6 +782,7 @@ try:
         conn.execute("""
                     CREATE TABLE IF NOT EXISTS repayments (
                     id INTEGER PRIMARY KEY,
+                    repayment_id TEXT UNIQUE,
                     amount REAL NOT NULL,
                     date DATE NOT NULL
             );
@@ -728,38 +797,6 @@ try:
                     FOREIGN KEY (loan_id) REFERENCES loans(id)
             );
                 """)
-        
-        # Print members
-        cursor = conn.execute("SELECT * FROM loans")
-        print("LOANS:")
-        # for row in cursor:
-        #     db_id
-        #     loan_id
-        #     member_id
-        #     amount
-        #     borrower_type
-        #     date_isssued
-        #     borrower_id
-        #     status
-
-        
-        # Print members
-        cursor = conn.execute("SELECT * FROM members")
-        print("\nMEMBERS:")
-        for row in cursor:
-            print(row)
-
-        # Print contributions
-        cursor = conn.execute("SELECT * FROM contributions")
-        print("\nCONTRIBUTIONS:")
-        for row in cursor:
-            print(row)
-
-        # Print borrowers
-        cursor = conn.execute("SELECT * FROM borrowers")
-        print("\nBORROWERS:")
-        for row in cursor:
-            print(row)
 
         while True:
             #Prompt user to select option from the menu
@@ -817,7 +854,6 @@ try:
                     add_repayment(conn)
 
                 elif  option == 10:
-                    view_repayment_allocations(conn)
                     view_repayments(conn)
 
                 elif option == 11:
