@@ -35,12 +35,11 @@ def add_member(conn):
 
 def view_members(conn):
     cursor = conn.execute("SELECT * FROM members")
-    print(f"{'ID':<7}{'Member ID':<13}{'Name':<15}")
+    print(f"{'Member ID':<13}{'Name':<15}")
     for row in cursor:
-        id = row["id"]
         member_id = row["member_id"]
         name = row["name"]
-        print(f"{id:<7}{member_id:<13}{name:<15}")
+        print(f"{member_id:<13}{name:<15}")
 
 def add_contribution(conn):
     while True:
