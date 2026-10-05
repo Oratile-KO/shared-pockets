@@ -4,23 +4,30 @@ import sqlite3
 def add_member(conn):
     prefix  = 'M'
     name = input("Enter member name: ").strip().capitalize()
+
     if not name:
         print("Name cannot be empty!")
         return
+    
     #Generate ID
     cursor = conn.execute("""
         SELECT MAX(CAST(SUBSTR(member_id, 2) AS INTEGER))
         FROM members
     """)
+
     result = cursor.fetchone()
+
     if result[0] is None:
         max_number = 0
     else:
         max_number = result[0]
+
     member_id = prefix  + f"{max_number + 1:03}"
     date_joined = input("Enter date joined (YYYY-MM-DD): ")
+
     try:
         datetime.strptime(date_joined, "%Y-%m-%d")
+        
     except ValueError:
         print("Invalid date. Use YYYY-MM-DD.")
         return
@@ -34,8 +41,10 @@ def add_member(conn):
     print("Member successfully added!")
 
 def view_members(conn):
-    cursor = conn.execute("SELECT * FROM members")
+    cursor = conn.execute("""SELECT member_id as "member_id", name as "name" FROM members""")
+
     print(f"{'Member ID':<13}{'Name':<15}")
+
     for row in cursor:
         member_id = row["member_id"]
         name = row["name"]
@@ -217,6 +226,7 @@ def add_loan(conn):
             if external_type == 1:
                 while True:
                     name = input("Enter borrower name: ").strip().capitalize()
+
                     if not name:
                         print("Borrower name cannot be blank!")
                         continue
@@ -236,16 +246,21 @@ def add_loan(conn):
                                         SELECT MAX(CAST(SUBSTR(borrower_id, 2) AS INTEGER))
                                         FROM borrowers
                                     """)
+
                                     result = cursor.fetchone()
+
                                     if result[0] is None:
                                         max_number = 0
                                     else:
                                         max_number = result[0]
+
                                     borrower_id = prefix  + f"{max_number + 1:03}"
+
                                     cursor = conn.execute("""
                                             INSERT INTO borrowers(name, borrower_id)
                                             VALUES(?, ?)
                                             """, (name, borrower_id ))
+                                    
                                     borrower_db_id = cursor.lastrowid
 
                                     #Generate Loan ID
@@ -289,13 +304,14 @@ def add_loan(conn):
                     for borrower in has_borrowers:
                         borrower_id = borrower["borrower_id"]
                         borrower_name = borrower["name"]
+
                         print(f"{borrower_id:<13}{borrower_name}")
 
                     while True:
                             borrower_id = input("Enter borrower ID: ").strip().capitalize()
 
                             cursor = conn.execute("""
-                                        SELECT *
+                                        SELECT name as "name"
                                         FROM borrowers
                                         WHERE borrower_id = ?
                                     """, (borrower_id,))
@@ -309,7 +325,7 @@ def add_loan(conn):
                             else:
                                 while True:
                                     try:
-                                        amount = float(input(f"Enter amount {borrower_name} wants to borrow: "))
+                                        amount = float(input(f"Enter amount {existing_borrower["name"]} wants to borrow: "))
                                         if amount <= 0:
                                             print("Amount cannot be below R1, please try again!")
                                             continue
@@ -320,11 +336,14 @@ def add_loan(conn):
                                                 SELECT MAX(CAST(SUBSTR(loan_id, 2) AS INTEGER))
                                                 FROM loans
                                             """)
+
                                             result = cursor.fetchone()
+
                                             if result[0] is None:
                                                 max_number = 0
                                             else:
                                                 max_number = result[0]
+
                                             loan_id = prefix  + f"{max_number + 1:03}"
                                             date_issued = datetime.now().strftime("%Y-%m-%d")
 
@@ -500,13 +519,13 @@ def add_repayment(conn):
                                             max_number = 0
                                         else:
                                             max_number = result[0]
-                                        repaymend_id = prefix  + f"{max_number + 1:03}"
+                                        repayment_id = prefix  + f"{max_number + 1:03}"
                                         date_paid = datetime.now().strftime("%Y-%m-%d")
                                         
                                         cursor = conn.execute("""
                                                 INSERT INTO repayments(amount, repayment_id, date)
                                                 VALUES(?, ?, ?)
-                                            """, (repayment_amount, repaymend_id, date_paid,))
+                                            """, (repayment_amount, repayment_id, date_paid,))
 
                                         repayment_db_id = cursor.lastrowid
 
@@ -641,7 +660,7 @@ def add_repayment(conn):
                                             #Generate Repayment ID
                                             prefix  = 'R'
                                             cursor = conn.execute("""
-                                                SELECT MAX(CAST(SUBSTR(loan_id, 2) AS INTEGER))
+                                                SELECT MAX(CAST(SUBSTR(repayment_id, 2) AS INTEGER))
                                                 FROM repayments
                                             """)
                                             result = cursor.fetchone()
@@ -649,13 +668,13 @@ def add_repayment(conn):
                                                 max_number = 0
                                             else:
                                                 max_number = result[0]
-                                            repaymend_id = prefix  + f"{max_number + 1:03}"
+                                            repayment_id = prefix  + f"{max_number + 1:03}"
                                             date_paid = datetime.now().strftime("%Y-%m-%d")
 
                                             cursor = conn.execute("""
                                                 INSERT INTO repayments(amount, repayment_id, date)
                                                 VALUES(?, ?, ?)
-                                            """, (repayment_amount, repaymend_id, date_paid,))
+                                            """, (repayment_amount, repayment_id, date_paid,))
                     
                                             repayment_db_id = cursor.lastrowid
                     
@@ -1110,7 +1129,7 @@ try:
         while True:
             #Prompt user to select option from the menu
             try:
-                option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total \n7. Add loan \n8. View loans \n9. Add Repayment \n10. View repayment allocations \n11. Close \n").strip())
+                option = int(input(f"\nSelect an option: \n1. Add member \n2. View members \n3. Record contribution \n4. View contributions \n5. Calculate member total \n6. Calculate group total \n7. Add loan \n8. View loans \n9. Add Repayment \n10. View repayments \n11. View Settlements \n12. Close \n").strip())
 
                 if option == 1:
                     add_member(conn)
