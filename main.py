@@ -43,35 +43,39 @@ def view_members(conn):
         print(f"{id:<7}{member_id:<13}{name:<15}")
 
 def add_contribution(conn):
-    member_db_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
-    if not member_db_id:
-        print("Member ID cannot be empty! Please try again.")
-        return
-    cursor = conn.execute(
-        "SELECT id FROM members WHERE member_id = ?",
-        (member_db_id,)
-    )
-    result = cursor.fetchone()
-    if result is None:
-        print("Member ID not found! Please try again.")
-        return
-    member_id = result[0]
-    try:
-        amount = float(input(f"Enter amount member is contributing: ").strip()) 
-        if amount <= 0:
-                print("Enter amount greater that 0")
-                return
-    except ValueError:
-            print("Please enter a valid amount!")
-            return
+    while True:
+        member_db_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
+        if not member_db_id:
+            print("Member ID cannot be empty! Please try again.")
+            continue
+        cursor = conn.execute(
+            "SELECT id FROM members WHERE member_id = ?",
+            (member_db_id,)
+        )
+        result = cursor.fetchone()
+        if result is None:
+            print("Member ID not found! Please try again.")
+            continue
+        member_id = result[0]
+        while True:
+            try:
+                amount = float(input(f"Enter amount member is contributing: ").strip()) 
+                if amount <= 0:
+                        print("Enter amount greater that 0")
+                        continue
+                else:
+                    break
+            except ValueError:
+                    print("Please enter a valid amount!")
 
-    conn.execute("""
-        INSERT INTO contributions (member_id, amount, date)
-        VALUES (?, ?, ?)
-        """, (member_id, amount, datetime.now().strftime("%Y-%m-%d")))
+        conn.execute("""
+            INSERT INTO contributions (member_id, amount, date)
+            VALUES (?, ?, ?)
+            """, (member_id, amount, datetime.now().strftime("%Y-%m-%d")))
 
-    conn.commit()
-    print("Contribution added successfully!")
+        conn.commit()
+        print("Contribution added successfully!")
+        break 
 
 def view_contributions(conn):
     cursor = conn.execute("""
@@ -465,7 +469,7 @@ def add_repayment(conn):
                                         #Generate Repayment ID
                                         prefix  = 'R'
                                         cursor = conn.execute("""
-                                                SELECT MAX(CAST(SUBSTR(loan_id, 2) AS INTEGER))
+                                                SELECT MAX(CAST(SUBSTR(repayment_id, 2) AS INTEGER))
                                                 FROM repayments
                                             """)
                                         result = cursor.fetchone()
@@ -725,7 +729,44 @@ def view_repayments(conn):
             continue
         break
 
+def settlements(conn):
+    cursor = conn.execute("""
+                SELECT 
+                    members.member_id as "member_id", 
+                    members.name as "name", 
+                    (
+                        SELECT COALESCE(SUM(amount), 0)
+                        FROM contributions
+                        WHERE members.id = contributions.member_id
+                    ) AS total_contributions,
+                    (
+                        SELECT COALESCE(SUM(amount), 0)
+                        FROM loans
+                        WHERE members.id = loans.member_id
+                    ) as total_loans,
+                    (
+                        SELECT COALESCE(SUM(repayment_allocations.amount), 0)
+                        FROM repayment_allocations
+                        JOIN loans
+                            ON loans.id = repayment_allocations.loan_id
+                        WHERE members.id = loans.member_id
+                    ) as total_repayments
+                FROM members
+        """)
+    settlements = cursor.fetchall()
 
+    print(f"{'Member ID':<15}{'Name':<17}{'Contributions':<15}{'Loans':<17}{'Repayments':<15}{'Outstanding Loan':<17}{'Settlement'}")
+    print_separator()
+    for settlement in settlements:
+        member_id = settlement["member_id"]
+        member_name = settlement["name"]
+        total_contributed = settlement["total_contributions"]
+        total_loaned = settlement["total_loans"]
+        total_repayed = settlement["total_repayments"]
+        outstanding_loan = total_loaned - total_repayed
+        settlement_amount = total_contributed - outstanding_loan #Preview
+        print(f"{member_id:<15}{member_name:<17}R{total_contributed:<15,.2f}R{total_loaned:<15,.2f}R{total_repayed:<15,.2f}R{outstanding_loan:<15,.2f}R{settlement_amount:,.2f}")
+    
 
 #create sqlite members table
 try:
@@ -797,6 +838,251 @@ try:
                     FOREIGN KEY (loan_id) REFERENCES loans(id)
             );
                 """)
+        # conn.execute("""
+        #             INSERT INTO contributions (member_id, amount, date)
+        #             VALUES
+        #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-01-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-02-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-03-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-04-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-05-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-06-15'),
+
+        #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-01-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-02-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-03-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-04-15'),
+
+        #                 ((SELECT id FROM members WHERE name = 'Omphemetse'), 500.00, '2026-04-15'),
+
+        #                 ((SELECT id FROM members WHERE name = 'Refilwe'), 200.00, '2026-02-15'),
+
+        #                 ((SELECT id FROM members WHERE name = 'Rorisang'), 200.00, '2026-02-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Rorisang'), 300.00, '2026-05-15'),
+
+        #                 ((SELECT id FROM members WHERE name = 'Tlamelo'), 200.00, '2026-01-15'),
+        #                 ((SELECT id FROM members WHERE name = 'Tlamelo'), 200.00, '2026-02-15'),
+
+        #                 ((SELECT id FROM members WHERE name = 'Tshidiso'), 200.00, '2026-02-15'),
+
+        #                 ((SELECT id FROM members WHERE name = 'Tumisang'), 1000.00, '2026-04-15');
+
+        #         """)
+        
+        # conn.execute("""
+        #             INSERT INTO borrowers (borrower_id, name)
+        #             VALUES
+        #                 ('B001', 'Omphile'),
+        #                 ('B002', 'Dinkwetse'),
+        #                 ('B003', 'Lavida');
+        #     """)
+       
+        # conn.execute("""
+        #             INSERT INTO loans (
+        #                 loan_id,
+        #                 borrower_type,
+        #                 member_id,
+        #                 borrower_id,
+        #                 amount,
+        #                 date_issued,
+        #                 status
+        #             )
+        #             VALUES
+        #             (
+        #                     'L001',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Tshidiso'),
+        #                     NULL,
+        #                     400.00,
+        #                     '2026-03-10',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L002',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Tshidiso'),
+        #                     NULL,
+        #                     100.00,
+        #                     '2026-05-12',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L003',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Tshidiso'),
+        #                     NULL,
+        #                     500.00,
+        #                     '2026-06-17',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L004',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Tumisang'),
+        #                     NULL,
+        #                     2000.00,
+        #                     '2026-03-17',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L005',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
+        #                     NULL,
+        #                     100.00,
+        #                     '2026-04-04',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L006',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Kutlwano'),
+        #                     NULL,
+        #                     300.00,
+        #                     '2026-04-11',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L007',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Kutlwano'),
+        #                     NULL,
+        #                     2800.00,
+        #                     '2026-04-11',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L008',
+        #                     'external',
+        #                     NULL,
+        #                     (SELECT id FROM borrowers WHERE borrower_id = 'B001'),
+        #                     700.00,
+        #                     '2026-04-10',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L009',
+        #                     'external',
+        #                     NULL,
+        #                     (SELECT id FROM borrowers WHERE borrower_id = 'B002'),
+        #                     2200.00,
+        #                     '2026-05-25',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L010',
+        #                     'external',
+        #                     NULL,
+        #                     (SELECT id FROM borrowers WHERE borrower_id = 'B003'),
+        #                     1000.00,
+        #                     '2026-06-17',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L011',
+        #                     'external',
+        #                     NULL,
+        #                     (SELECT id FROM borrowers WHERE borrower_id = 'B003'),
+        #                     500.00,
+        #                     '2026-07-05',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L012',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
+        #                     NULL,
+        #                     100.00,
+        #                     '2026-08-07',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L013',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
+        #                     NULL,
+        #                     200.00,
+        #                     '2026-08-16',
+        #                     'Open'
+        #                 ),
+        #                 (
+        #                     'L014',
+        #                     'member',
+        #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
+        #                     NULL,
+        #                     100.00,
+        #                     '2026-09-02',
+        #                     'Open'
+        #                 );
+
+        #         """)
+        # conn.execute("""
+        #             INSERT INTO repayments (repayment_id, amount, date)
+        #             VALUES
+        #                 ('R001', 2000.00, '2026-04-02'),
+        #                 ('R002', 1000.00, '2026-04-30'),
+        #                 ('R003', 1100.00, '2026-05-25'),
+        #                 ('R004', 200.00,  '2026-05-30'),
+        #                 ('R005', 2200.00, '2026-06-17'),
+        #                 ('R006', 500.00,  '2026-06-17'),
+        #                 ('R007', 200.00,  '2026-06-30');
+
+        #         """)
+        # conn.execute("""
+        #            INSERT INTO repayment_allocations (repayment_id, loan_id, amount)
+        #             VALUES
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R001'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L004'),
+        #                 2000.00
+        #             ),
+
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R002'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L006'),
+        #                 300.00
+        #             ),
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R002'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L007'),
+        #                 700.00
+        #             ),
+
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R003'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L007'),
+        #                 1100.00
+        #             ),
+
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R004'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L008'),
+        #                 200.00
+        #             ),
+
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R005'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L009'),
+        #                 2200.00
+        #             ),
+
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R006'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L001'),
+        #                 400.00
+        #             ),
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R006'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L002'),
+        #                 100.00
+        #             ),
+        #             (
+        #                 (SELECT id FROM repayments WHERE repayment_id = 'R007'),
+        #                 (SELECT id FROM loans WHERE loan_id = 'L008'),
+        #                 200.00
+        #             );
+
+        #         """)
 
         while True:
             #Prompt user to select option from the menu
@@ -856,7 +1142,10 @@ try:
                 elif  option == 10:
                     view_repayments(conn)
 
-                elif option == 11:
+                elif  option == 11:
+                    settlements(conn)
+
+                elif option == 12:
                     print("Goodbye!")
                     break
 
