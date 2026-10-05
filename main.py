@@ -136,85 +136,100 @@ def has_members(conn):
     return cursor.fetchone()[0]
 
 def add_loan(conn):
+    borrower_type  = ''
     while True:
         try:
-            borrower_choice = int(input("Please select borrower type: \n1. Member \n2. External Borrower\n").strip())
+            borrower_choice = int(input("Please select borrower type: \n1. Member \n2. External Borrower \n3. Close\n").strip())
+
             if borrower_choice == 1:
                 borrower_type = 'member'
                 break
+
             elif borrower_choice == 2:
                 borrower_type = 'external'
                 break
+
+            elif borrower_choice ==3:
+                break
+
             else:
-                print("invalid selection, please enter '1' or '2'!")
+                print("Invalid selection, please enter '1' or '2'!")
+
         except ValueError:
             print("Invalid input, please enter '1' or '2'!")
 
     if borrower_type == 'member':
         view_members(conn)
         while True: 
-            try:
-                member_db_id  = int(input("Enter ID of member taking a loan: ").strip())
+                member_id  = input("Enter Member ID of member taking a loan: ").strip().capitalize()
 
                 cursor = conn.execute("""
                         SELECT id, member_id, name
                         FROM members
-                        WHERE id = ?
-                    """, (member_db_id,))
+                        WHERE member_id = ?
+                    """, (member_id,))
+                
                 member = cursor.fetchone()
-                if member is None:
-                    print(f"Member ID '{member_db_id}' does not exist, please try again!")
+
+                if not member:
+                    print(f"Member ID '{member_id}' does not exist, please try again!")
+
                 else:
                     while True:
                         try:
                             amount = float(input(f"Enter amount {member[2]} wants to borrow: "))
+
                             if amount <= 0:
                                 print("Amount cannot be below R1, please try again!")
+
                             else:
                                 prefix = 'L'
                                 cursor = conn.execute("""
                                         SELECT MAX(CAST(SUBSTR(loan_id, 2) AS INTEGER))
                                         FROM loans
                                     """)
+                                
                                 result = cursor.fetchone()
                                 if result[0] is None:
                                     max_number = 0
                                 else:
                                     max_number = result[0]
+
                                 loan_id = prefix  + f"{max_number + 1:03}"
-                                print(loan_id)
                                 date_issued = datetime.now().strftime("%Y-%m-%d")
+
                                 conn.execute("""
                                                 INSERT INTO loans(member_id, borrower_type, amount, loan_id, date_issued, status)
                                                 VALUES(?, ?, ?, ?, ?, 'open')
                                             """, (member[0], borrower_type, amount, loan_id, date_issued))
+                                
                                 conn.commit()
-                                result = conn.execute("SELECT * FROM loans")
-                                for row in result:
-                                    print(row)
                                 break
+
                         except ValueError:
                             print("Invalid input, please try again!")
                     break
-            except ValueError:
-                print("Invalid input, please try again!")
 
     if borrower_type == 'external':
        while True:
         try:
             external_type = int(input("Is the external borrower new or existing? \n1. New Borrower \n2. Existing Borrower \n").strip())
+
             if external_type == 1:
                 while True:
                     name = input("Enter borrower name: ").strip().capitalize()
                     if not name:
                         print("Borrower name cannot be blank!")
                         continue
+
                     else:
                         while True:
                             try:
                                 amount = float(input(f"Enter amount {name} is requesting to borrow: ").strip())
+
                                 if amount <= 0:
                                     print("Amount cannot be below R1, please try again!")
+
                                 else:
                                     #Generate Borrower ID
                                     prefix  = 'B'
@@ -257,35 +272,45 @@ def add_loan(conn):
                             except ValueError:
                                 print("Invalid amount! Please try again.")
                     break
+
             elif external_type == 2:
                 cursor = conn.execute("""
-                            SELECT * 
+                            SELECT borrower_id as "borrower_id", name as "name"
                             FROM borrowers
                         """)
                 has_borrowers = cursor.fetchall()
+
                 if not has_borrowers:
                     print("There are no existing external borrowers yet! Please try again.")
                     continue
+
                 else:
-                    print(f"{'ID':<5}{'Name':<15}")
+                    print(f"{'Borrower ID':<13}{'Name':<15}")
+
                     for borrower in has_borrowers:
-                        print(f"{borrower[0]:<5}{borrower[1]}")
+                        borrower_id = borrower["borrower_id"]
+                        borrower_name = borrower["name"]
+                        print(f"{borrower_id:<13}{borrower_name}")
+
                     while True:
-                        try:
-                            borrower_db_id = int(input("Enter borrower ID: ").strip())
+                            borrower_id = input("Enter borrower ID: ").strip().capitalize()
+
                             cursor = conn.execute("""
                                         SELECT *
                                         FROM borrowers
-                                        WHERE id = ?
-                                    """, (borrower_db_id,))
+                                        WHERE borrower_id = ?
+                                    """, (borrower_id,))
+                            
                             existing_borrower = cursor.fetchone()
+
                             if existing_borrower is None:
-                                print("Incorrect ID entered, please try again!")
+                                print("Incorrect Borrower ID entered, please try again!")
                                 continue
+
                             else:
                                 while True:
                                     try:
-                                        amount = float(input(f"Enter amount {existing_borrower[1]} wants to borrow: "))
+                                        amount = float(input(f"Enter amount {borrower_name} wants to borrow: "))
                                         if amount <= 0:
                                             print("Amount cannot be below R1, please try again!")
                                             continue
@@ -307,14 +332,13 @@ def add_loan(conn):
                                             conn.execute("""
                                                         INSERT INTO loans(borrower_id, borrower_type, amount, loan_id, date_issued, status)
                                                         VALUES(?, ?, ?, ?, ?, 'open')
-                                                    """, (borrower_db_id, borrower_type, amount, loan_id,date_issued))
+                                                    """, (borrower_id, borrower_type, amount, loan_id,date_issued))
                                             conn.commit()
                                             break
+
                                     except ValueError:
                                         print("Invalid amount, please try again!")
                                 break
-                        except ValueError:
-                            print("invalid input, please try again!")   
         except ValueError:
             print("Invalid selection, please enter either '1' or '2'!")
             continue
