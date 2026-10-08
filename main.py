@@ -443,13 +443,17 @@ def create_repayment(conn, amount, allocations):
     except sqlite3.Error:
         conn.rollback() 
         raise
-    
-  
 
 def add_repayment(conn):
     while True:
         try:
-            borrower_type = int(input("Select payment type: \n1. Member Repayment \n2. External Borrower Repayment \n3. Close\n").strip())
+            borrower_type = int(input("Select borrower type: \n1. Member Repayment \n2. External Borrower Repayment \n3. Close\n").strip())
+
+        except ValueError:
+                print("Invalid input, please try again!")
+                continue
+
+        try:
             if borrower_type == 1:
                 cursor = conn.execute("""
                         SELECT  id as 'db_id', member_id as 'member_id', members.name as 'name'
@@ -588,7 +592,8 @@ def add_repayment(conn):
 
                                 create_repayment(conn, repayment_amount, allocations)
 
-                                break
+                                print("Repayment successfully logged!")
+                            break
 
             elif borrower_type == 3:
                 break
@@ -597,11 +602,9 @@ def add_repayment(conn):
                 print("Invalid selection, please try again!")
                 continue
 
-        except ValueError:
-            print("Invalid input, please try again!")
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
             continue
-
-        break
 
 def view_repayments(conn):
     cursor = conn.execute("""
@@ -1091,7 +1094,9 @@ try:
 except sqlite3.IntegrityError as e:
     if "UNIQUE constraint failed" in str(e):
         print("Member ID already exists. Please use a different member ID.")
+
     elif "FOREIGN KEY constraint failed" in str(e):
         print("That member does not exist.")
+
     else:
         print(f"Database Error: {e}")
