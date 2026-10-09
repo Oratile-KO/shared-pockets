@@ -581,7 +581,6 @@ def add_repayment(conn):
                                 continue
 
                             else:
-
                                 outstanding_balance = display_loans_and_calc_balance(borrower)
 
                                 loan_borrower = borrower[0]["name"]
