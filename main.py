@@ -683,8 +683,8 @@ def settlements(conn):
         """)
     settlements = cursor.fetchall()
 
-    print(f"{'Member ID':<15}{'Name':<17}{'Contributions':<15}{'Loans':<17}{'Repayments':<15}{'Outstanding Loan':<19}{'Settlement'}")
-    print_separator(110)
+    print(f"{'Member ID':<15}{'Name':<17}{'Contributions':<15}{'Loans':<17}{'Repayments':<15}{'Outstanding Loan':<19}{'Settlement':}")
+    print_separator(120)
     for settlement in settlements:
         member_id = settlement["member_id"]
         member_name = settlement["name"]
@@ -692,7 +692,7 @@ def settlements(conn):
         total_loaned = settlement["total_loans"]
         total_repayed = settlement["total_repayments"]
         outstanding_loan = total_loaned - total_repayed
-        settlement_amount = total_contributed - outstanding_loan #Preview
+        settlement_amount = total_contributed - outstanding_loan
         print(f"{member_id:<15}{member_name:<17}R{total_contributed:<15,.2f}R{total_loaned:<15,.2f}R{total_repayed:<15,.2f}R{outstanding_loan:<18,.2f}R{settlement_amount:,.2f}")
     
 
