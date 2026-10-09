@@ -444,6 +444,19 @@ def create_repayment(conn, amount, allocations):
         conn.rollback() 
         raise
 
+def process_payment(conn, loans):
+    outstanding_balance = display_loans_and_calc_balance(loans)
+    
+    loan_borrower = loans[0]["name"]
+    
+    repayment_amount = validate_repayment(loan_borrower, outstanding_balance)
+    
+    allocations = allocate_repayment(repayment_amount, loans)
+    
+    create_repayment(conn, repayment_amount, allocations)
+    
+    print("Repayment successfully logged!")
+
 def add_repayment(conn):
     while True:
         try:
@@ -511,18 +524,8 @@ def add_repayment(conn):
                             continue
 
                         else:
-
-                            outstanding_balance = display_loans_and_calc_balance(member)
-
-                            loan_borrower = member[0]["name"]
-
-                            repayment_amount = validate_repayment(loan_borrower, outstanding_balance)
-
-                            allocations = allocate_repayment(repayment_amount, member)
-
-                            create_repayment(conn, repayment_amount, allocations)
-
-                            print("Repayment successfully logged!")
+                            process_payment(conn, member)
+                        
                         break
                         
             elif borrower_type == 2:
@@ -581,17 +584,8 @@ def add_repayment(conn):
                                 continue
 
                             else:
-                                outstanding_balance = display_loans_and_calc_balance(borrower)
+                                process_payment(conn, borrower)
 
-                                loan_borrower = borrower[0]["name"]
-
-                                repayment_amount = validate_repayment(loan_borrower, outstanding_balance)
-                                
-                                allocations = allocate_repayment(repayment_amount, borrower)
-
-                                create_repayment(conn, repayment_amount, allocations)
-
-                                print("Repayment successfully logged!")
                             break
 
             elif borrower_type == 3:
