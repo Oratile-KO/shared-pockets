@@ -514,7 +514,7 @@ def add_repayment(conn):
                                         WHERE members.member_id = ?
                                         GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
                                         HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
-                                        ORDER BY loans.date_issued ASC, loans.id ASC    
+                                        ORDER BY loans.date_issued ASC, loans.id ASC
                                             """, (member_id,))
                         
                         member = cursor.fetchall()
