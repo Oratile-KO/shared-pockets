@@ -696,7 +696,6 @@ def settlements(conn):
         remaining_debt = max(0, outstanding_loan - total_contributed)
         print(f"{member_id:<15}{member_name:<17}R{total_contributed:<15,.2f}R{total_loaned:<15,.2f}R{total_repayed:<15,.2f}R{outstanding_loan:<18,.2f}R{settlement_amount:<15,.2f}R{remaining_debt:<18,.2f}")
     
-
 #create sqlite members table
 try:
     with sqlite3.connect("shared_pockets.db") as conn:
