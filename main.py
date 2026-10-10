@@ -16,21 +16,23 @@ def generate_id(conn, table, column, prefix):
     return prefix + f"{max_number + 1:03}"
     
 def add_member(conn):
-    name = input("Enter member name: ").strip().capitalize()
+    while True:
+        name = input("Enter member name: ").strip().capitalize()
 
-    if not name:
-        print("Name cannot be empty!")
-        return
-    else:
-        member_id = generate_id(conn, "members", "member_id", "M")
-        date_joined = input("Enter date joined (YYYY-MM-DD): ")
+        if not name:
+            print("Name cannot be empty!")
+            continue
+        
+        else:
+            member_id = generate_id(conn, "members", "member_id", "M")
+            date_joined = input("Enter date joined (YYYY-MM-DD): ").strip()
 
-        try:
-            datetime.strptime(date_joined, "%Y-%m-%d")
-            
-        except ValueError:
-            print("Invalid date. Use YYYY-MM-DD.")
-            return
+            try:
+                datetime.strptime(date_joined, "%Y-%m-%d")
+                
+            except ValueError:
+                print("Invalid date. Use YYYY-MM-DD.")
+                continue
 
         conn.execute("""
             INSERT INTO members (member_id, name, date_joined)
@@ -39,6 +41,7 @@ def add_member(conn):
 
         conn.commit()
         print("Member successfully added!")
+        break
 
 def view_members(conn):
     cursor = conn.execute("""SELECT member_id as "member_id", name as "name" FROM members""")
