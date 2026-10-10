@@ -703,316 +703,76 @@ if __name__ == "__main__":
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS members (
+                    CREATE TABLE IF NOT EXISTS members (
                     id INTEGER PRIMARY KEY,
                     member_id TEXT UNIQUE,
                     name TEXT NOT NULL,
                     date_joined DATE NOT NULL
                 );
             """)
+            
             conn.execute("""
-                        CREATE TABLE IF NOT EXISTS contributions (
-                        id INTEGER PRIMARY KEY,
-                        member_id INTEGER,
-                        amount REAL NOT NULL,
-                        date DATE NOT NULL,
-                        FOREIGN KEY (member_id) REFERENCES members(id)
+                    CREATE TABLE IF NOT EXISTS contributions (
+                    id INTEGER PRIMARY KEY,
+                    member_id INTEGER,
+                    amount REAL NOT NULL,
+                    date DATE NOT NULL,
+                    FOREIGN KEY (member_id) REFERENCES members(id)
                 );
             """)
+
             conn.execute("""
-                        CREATE TABLE IF NOT EXISTS borrowers (
-                        id INTEGER PRIMARY KEY,
-                        borrower_id TEXT UNIQUE NOT NULL,
-                        name TEXT NOT NULL
+                    CREATE TABLE IF NOT EXISTS borrowers (
+                    id INTEGER PRIMARY KEY,
+                    borrower_id TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL
                 );
             """)
+
             conn.execute("""
-                        CREATE TABLE IF NOT EXISTS loans (
-                        id INTEGER PRIMARY KEY,
-                        loan_id TEXT UNIQUE,
-                        borrower_type TEXT NOT NULL,        
-                        member_id INTEGER,
-                        borrower_id INTEGER,
-                        amount REAL NOT NULL,   
-                        date_issued DATE NOT NULL,
-                        status TEXT NOT NULL,
-                        CHECK (
-                            (borrower_type = 'member'
-                                AND member_id IS NOT NULL
-                                AND borrower_id IS NULL)
-                            OR 
-                            (borrower_type = 'external'
-                                AND member_id IS NULL
-                                AND borrower_id IS NOT NULL)
-                        ),
-                        FOREIGN KEY (member_id) REFERENCES members(id),
-                        FOREIGN KEY (borrower_id) REFERENCES borrowers(id)
+                    CREATE TABLE IF NOT EXISTS loans (
+                    id INTEGER PRIMARY KEY,
+                    loan_id TEXT UNIQUE,
+                    borrower_type TEXT NOT NULL,        
+                    member_id INTEGER,
+                    borrower_id INTEGER,
+                    amount REAL NOT NULL,   
+                    date_issued DATE NOT NULL,
+                    status TEXT NOT NULL,
+                    CHECK (
+                        (borrower_type = 'member'
+                            AND member_id IS NOT NULL
+                            AND borrower_id IS NULL)
+                        OR 
+                        (borrower_type = 'external'
+                            AND member_id IS NULL
+                            AND borrower_id IS NOT NULL)
+                    ),
+                    FOREIGN KEY (member_id) REFERENCES members(id),
+                    FOREIGN KEY (borrower_id) REFERENCES borrowers(id)
                 );
             """)
+
             conn.execute("""
-                        CREATE TABLE IF NOT EXISTS repayments (
-                        id INTEGER PRIMARY KEY,
-                        repayment_id TEXT UNIQUE,
-                        amount REAL NOT NULL,
-                        date DATE NOT NULL
+                    CREATE TABLE IF NOT EXISTS repayments (
+                    id INTEGER PRIMARY KEY,
+                    repayment_id TEXT UNIQUE,
+                    amount REAL NOT NULL,
+                    date DATE NOT NULL
                 );
             """)
+
             conn.execute("""
-                        CREATE TABLE IF NOT EXISTS repayment_allocations (
-                        id INTEGER PRIMARY KEY,
-                        repayment_id INTEGER,
-                        loan_id INTEGER,
-                        amount REAL NOT NULL,
-                        FOREIGN KEY (repayment_id) REFERENCES repayments(id),
-                        FOREIGN KEY (loan_id) REFERENCES loans(id)
+                    CREATE TABLE IF NOT EXISTS repayment_allocations (
+                    id INTEGER PRIMARY KEY,
+                    repayment_id INTEGER,
+                    loan_id INTEGER,
+                    amount REAL NOT NULL,
+                    FOREIGN KEY (repayment_id) REFERENCES repayments(id),
+                    FOREIGN KEY (loan_id) REFERENCES loans(id)
                 );
                     """)
-            # conn.execute("""
-            #             INSERT INTO contributions (member_id, amount, date)
-            #             VALUES
-            #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-01-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-02-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-03-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-04-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-05-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Kutlwano'), 200.00, '2026-06-15'),
-
-            #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-01-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-02-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-03-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Mmami'), 200.00, '2026-04-15'),
-
-            #                 ((SELECT id FROM members WHERE name = 'Omphemetse'), 500.00, '2026-04-15'),
-
-            #                 ((SELECT id FROM members WHERE name = 'Refilwe'), 200.00, '2026-02-15'),
-
-            #                 ((SELECT id FROM members WHERE name = 'Rorisang'), 200.00, '2026-02-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Rorisang'), 300.00, '2026-05-15'),
-
-            #                 ((SELECT id FROM members WHERE name = 'Tlamelo'), 200.00, '2026-01-15'),
-            #                 ((SELECT id FROM members WHERE name = 'Tlamelo'), 200.00, '2026-02-15'),
-
-            #                 ((SELECT id FROM members WHERE name = 'Tshidiso'), 200.00, '2026-02-15'),
-
-            #                 ((SELECT id FROM members WHERE name = 'Tumisang'), 1000.00, '2026-04-15');
-
-            #         """)
             
-            # conn.execute("""
-            #             INSERT INTO borrowers (borrower_id, name)
-            #             VALUES
-            #                 ('B001', 'Omphile'),
-            #                 ('B002', 'Dinkwetse'),
-            #                 ('B003', 'Lavida');
-            #     """)
-        
-            # conn.execute("""
-            #             INSERT INTO loans (
-            #                 loan_id,
-            #                 borrower_type,
-            #                 member_id,
-            #                 borrower_id,
-            #                 amount,
-            #                 date_issued,
-            #                 status
-            #             )
-            #             VALUES
-            #             (
-            #                     'L001',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Tshidiso'),
-            #                     NULL,
-            #                     400.00,
-            #                     '2026-03-10',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L002',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Tshidiso'),
-            #                     NULL,
-            #                     100.00,
-            #                     '2026-05-12',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L003',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Tshidiso'),
-            #                     NULL,
-            #                     500.00,
-            #                     '2026-06-17',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L004',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Tumisang'),
-            #                     NULL,
-            #                     2000.00,
-            #                     '2026-03-17',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L005',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
-            #                     NULL,
-            #                     100.00,
-            #                     '2026-04-04',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L006',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Kutlwano'),
-            #                     NULL,
-            #                     300.00,
-            #                     '2026-04-11',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L007',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Kutlwano'),
-            #                     NULL,
-            #                     2800.00,
-            #                     '2026-04-11',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L008',
-            #                     'external',
-            #                     NULL,
-            #                     (SELECT id FROM borrowers WHERE borrower_id = 'B001'),
-            #                     700.00,
-            #                     '2026-04-10',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L009',
-            #                     'external',
-            #                     NULL,
-            #                     (SELECT id FROM borrowers WHERE borrower_id = 'B002'),
-            #                     2200.00,
-            #                     '2026-05-25',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L010',
-            #                     'external',
-            #                     NULL,
-            #                     (SELECT id FROM borrowers WHERE borrower_id = 'B003'),
-            #                     1000.00,
-            #                     '2026-06-17',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L011',
-            #                     'external',
-            #                     NULL,
-            #                     (SELECT id FROM borrowers WHERE borrower_id = 'B003'),
-            #                     500.00,
-            #                     '2026-07-05',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L012',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
-            #                     NULL,
-            #                     100.00,
-            #                     '2026-08-07',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L013',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
-            #                     NULL,
-            #                     200.00,
-            #                     '2026-08-16',
-            #                     'Open'
-            #                 ),
-            #                 (
-            #                     'L014',
-            #                     'member',
-            #                     (SELECT id FROM members WHERE name = 'Omphemetse'),
-            #                     NULL,
-            #                     100.00,
-            #                     '2026-09-02',
-            #                     'Open'
-            #                 );
-
-            #         """)
-            # conn.execute("""
-            #             INSERT INTO repayments (repayment_id, amount, date)
-            #             VALUES
-            #                 ('R001', 2000.00, '2026-04-02'),
-            #                 ('R002', 1000.00, '2026-04-30'),
-            #                 ('R003', 1100.00, '2026-05-25'),
-            #                 ('R004', 200.00,  '2026-05-30'),
-            #                 ('R005', 2200.00, '2026-06-17'),
-            #                 ('R006', 500.00,  '2026-06-17'),
-            #                 ('R007', 200.00,  '2026-06-30');
-
-            #         """)
-            # conn.execute("""
-            #            INSERT INTO repayment_allocations (repayment_id, loan_id, amount)
-            #             VALUES
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R001'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L004'),
-            #                 2000.00
-            #             ),
-
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R002'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L006'),
-            #                 300.00
-            #             ),
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R002'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L007'),
-            #                 700.00
-            #             ),
-
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R003'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L007'),
-            #                 1100.00
-            #             ),
-
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R004'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L008'),
-            #                 200.00
-            #             ),
-
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R005'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L009'),
-            #                 2200.00
-            #             ),
-
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R006'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L001'),
-            #                 400.00
-            #             ),
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R006'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L002'),
-            #                 100.00
-            #             ),
-            #             (
-            #                 (SELECT id FROM repayments WHERE repayment_id = 'R007'),
-            #                 (SELECT id FROM loans WHERE loan_id = 'L008'),
-            #                 200.00
-            #             );
-
-            #         """)
-
             while True:
                 #Prompt user to select option from the menu
                 try:

@@ -1,6 +1,7 @@
 from main import allocate_repayment, validate_repayment
 from unittest.mock import patch, Mock
-import unittest
+import unittest, sqlite3
+
 
 class TestAllocateRepayment(unittest.TestCase):
 
@@ -157,6 +158,9 @@ class TestValidateRepayment(unittest.TestCase):
             repayment_amount = validate_repayment("John", 500)
 
         self.assertEqual(repayment_amount, 1.0)
+
+class TestCreateRepayment(unittest.TestCase):
         
+
 if __name__ == "__main__":
     unittest.main()
