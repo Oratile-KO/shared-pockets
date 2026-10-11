@@ -203,7 +203,7 @@ class TestTableCreation(unittest.TestCase):
         create_tables(self.conn)
         self.cursor.execute("""
                         INSERT INTO members(member_id, name, date_joined)
-                        VALUES('L001', 'Kano','2026-01-15')
+                        VALUES('M001', 'Kano','2026-01-15')
                     """)
         
         member_db_id = self.cursor.lastrowid
@@ -225,7 +225,20 @@ class TestTableCreation(unittest.TestCase):
 
         self.assertEqual(returned_contribution, expected_contribution)
         self.assertEqual(contributions['member_id'], member_db_id)
-
+            
+    def test_duplicate_member_id_rejected(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-01-19')
+                    """)
+        
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Lemo','2026-02-20')
+                    """)
             
 if __name__ == "__main__":
     unittest.main()
