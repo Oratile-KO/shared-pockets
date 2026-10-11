@@ -189,6 +189,15 @@ class TestTableCreation(unittest.TestCase):
             returned_table_names.add(table[0])
 
         self.assertEqual(returned_table_names, expected_table_names)
+    
+    def test_contribution_rejects_invalid_member(self):
+        create_tables(self.conn)
+        
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.cursor.execute("""
+                    INSERT INTO contributions(member_id, amount, date)
+                    VALUES(1, 300, '2026-01-15')
+                """)
         
 if __name__ == "__main__":
     unittest.main()
