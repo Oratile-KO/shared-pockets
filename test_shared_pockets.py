@@ -199,5 +199,33 @@ class TestTableCreation(unittest.TestCase):
                     VALUES(1, 300, '2026-01-15')
                 """)
         
+    def test_contribution_accepts_valid_member(self):
+        create_tables(self.conn)
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('L001', 'Kano','2026-01-15')
+                    """)
+        
+        member_db_id = self.cursor.lastrowid
+        
+        self.cursor.execute("""
+                    INSERT INTO contributions(member_id, amount, date)
+                    VALUES(?, 300, '2026-01-15')
+                """, (member_db_id,))
+
+        self.cursor.execute("""
+                            SELECT *
+                            FROM contributions
+                     """)
+
+        contributions = self.cursor.fetchone()
+
+        returned_contribution = contributions['amount']
+        expected_contribution = 300
+
+        self.assertEqual(returned_contribution, expected_contribution)
+        self.assertEqual(contributions['member_id'], member_db_id)
+
+            
 if __name__ == "__main__":
     unittest.main()
