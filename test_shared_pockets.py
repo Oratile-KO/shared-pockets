@@ -290,5 +290,37 @@ class TestTableCreation(unittest.TestCase):
         self.assertEqual(loans['borrower_id'], expected_borrower_id)
         self.assertEqual(loans['amount'], expected_loan_amount)
             
+    def test_external_loan_accepts_valid_external_borrower(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO borrowers(borrower_id, name)
+                        VALUES('B001', 'James')
+                    """)
+
+        borrower_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, borrower_id, amount, date_issued, status)
+                        VALUES('L001', 'external', ?, 1500, '2026-04-12', 'open')        
+                """, (borrower_db_id,))
+
+        self.cursor.execute("""
+                        SELECT *
+                        FROM loans
+                """)
+
+        loans  = self.cursor.fetchone()
+
+        expected_borrower_type = 'external'
+        expected_member_id = None
+        expected_borrower_id = borrower_db_id
+        expected_loan_amount = 1500
+
+        self.assertEqual(loans['borrower_type'], expected_borrower_type)
+        self.assertEqual(loans['member_id'], expected_member_id)
+        self.assertEqual(loans['borrower_id'], expected_borrower_id)
+        self.assertEqual(loans['amount'], expected_loan_amount)
+
 if __name__ == "__main__":
     unittest.main()
