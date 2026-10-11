@@ -258,6 +258,37 @@ class TestTableCreation(unittest.TestCase):
 
         self.assertEqual(context.exception.sqlite_errorcode, sqlite3.SQLITE_CONSTRAINT_CHECK)
 
+    def test_member_loan_accepts_valid_member(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Kano','2026-03-26')
+                    """)
+
+        member_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, member_id, amount, date_issued, status)
+                        VALUES('L001', 'member', ?, 2000, '2026-08-18', 'open')        
+                """, (member_db_id,))
+
+        self.cursor.execute("""
+                        SELECT *
+                        FROM loans
+                """)
+
+        loans  = self.cursor.fetchone()
+
+        expected_borrower_type = 'member'
+        expected_member_id = member_db_id
+        expected_borrower_id = None
+        expected_loan_amount = 2000
+
+        self.assertEqual(loans['borrower_type'], expected_borrower_type)
+        self.assertEqual(loans['member_id'], expected_member_id)
+        self.assertEqual(loans['borrower_id'], expected_borrower_id)
+        self.assertEqual(loans['amount'], expected_loan_amount)
             
 if __name__ == "__main__":
     unittest.main()
