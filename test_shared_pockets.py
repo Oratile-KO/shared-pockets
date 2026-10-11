@@ -239,6 +239,25 @@ class TestTableCreation(unittest.TestCase):
                         INSERT INTO members(member_id, name, date_joined)
                         VALUES('M001', 'Lemo','2026-02-20')
                     """)
+
+    def test_member_loan_rejects_external_borrower_id(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO borrowers(borrower_id, name)
+                        VALUES('B001', 'Sli')
+                """)
+
+        borrower_db_id = self.cursor.lastrowid
+
+        with self.assertRaises(sqlite3.IntegrityError) as context:
+            self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, borrower_id, amount, date_issued, status)
+                        VALUES('L001', 'member', ?, 4500, '2026-06-18', 'open')        
+                """, (borrower_db_id,))
+
+        self.assertEqual(context.exception.sqlite_errorcode, sqlite3.SQLITE_CONSTRAINT_CHECK)
+
             
 if __name__ == "__main__":
     unittest.main()
