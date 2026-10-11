@@ -1,4 +1,4 @@
-from main import allocate_repayment, validate_repayment
+from main import allocate_repayment, validate_repayment, create_tables
 from unittest.mock import patch, Mock
 import unittest, sqlite3
 
@@ -158,6 +158,37 @@ class TestValidateRepayment(unittest.TestCase):
             repayment_amount = validate_repayment("John", 500)
 
         self.assertEqual(repayment_amount, 1.0)
+
+class TestTableCreation(unittest.TestCase):
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        self.cursor = self.conn.cursor()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_create_tables(self):
+        expected_table_names = {'members', 'contributions', 'loans', 'repayments', 'repayment_allocations', 'borrowers'}
+        create_tables(self.conn)
+        self.cursor.execute("""
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                        AND name NOT LIKE 'sqlite_%'
+                    ORDER BY name;
+                """)
+
+        tables = self.cursor.fetchall()
+
+        returned_table_names = set()
+
+        for table in tables:
+            returned_table_names.add(table[0])
+
+        self.assertEqual(returned_table_names, expected_table_names)
         
 if __name__ == "__main__":
     unittest.main()
