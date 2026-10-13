@@ -1,5 +1,5 @@
-from main import allocate_repayment, validate_repayment, create_tables
-from unittest.mock import patch, Mock
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment
+from unittest.mock import patch
 import unittest, sqlite3
 
 
@@ -321,6 +321,49 @@ class TestTableCreation(unittest.TestCase):
         self.assertEqual(loans['member_id'], expected_member_id)
         self.assertEqual(loans['borrower_id'], expected_borrower_id)
         self.assertEqual(loans['amount'], expected_loan_amount)
+
+    def  test_create_repayment_records_payment_and_allocation(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Kano','2026-03-26')
+                    """)
+
+        member_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, member_id, amount, date_issued, status)
+                        VALUES('L001', 'member', ?, 2000, '2026-08-18', 'open')        
+                """, (member_db_id,))
+
+        member_loan_db_id = self.cursor.lastrowid
+
+        repayment_amount = 500.0
+
+        allocations =  [("L001", 500)]
+
+        repayment_db_id = create_repayment(self.conn, repayment_amount, allocations)
+
+        repayment = self.cursor.execute("""
+                            SELECT id, amount
+                            FROM repayments
+                            WHERE id = ?      
+                    """, (repayment_db_id,)).fetchone()
+
+        repayment_allocations = self.conn.execute("""
+                            SELECT repayment_id, loan_id, amount
+                            FROM repayment_allocations
+                            WHERE repayment_id = ?
+                    """, (repayment_db_id,)).fetchone()
+
+        self.assertIsNotNone(repayment)
+        self.assertEqual(repayment['amount'], repayment_amount)
+        
+        self.assertIsNotNone(repayment_allocations)
+        self.assertEqual(repayment_allocations['repayment_id'], repayment_db_id)
+        self.assertEqual(repayment_allocations['loan_id'], member_loan_db_id)
+        self.assertEqual(repayment_allocations['amount'], repayment_amount)
 
 if __name__ == "__main__":
     unittest.main()

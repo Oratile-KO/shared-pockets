@@ -497,7 +497,7 @@ def create_repayment(conn, amount, allocations):
 
         query = """INSERT INTO repayments(amount, repayment_id, date) VALUES(?, ?, ?)"""
         
-        cursor = conn.execute(query, (amount, repayment_id, date_paid,))
+        cursor = conn.execute(query, (amount, repayment_id, date_paid))
             
         repayment_db_id = cursor.lastrowid
         
@@ -522,7 +522,7 @@ def create_repayment(conn, amount, allocations):
         conn.rollback() 
         raise
 
-def process_payment(conn, loans):
+def process_repayment(conn, loans):
     outstanding_balance = display_loans_and_calc_balance(loans)
     
     loan_borrower = loans[0]["name"]
@@ -602,7 +602,7 @@ def add_repayment(conn):
                             continue
 
                         else:
-                            process_payment(conn, member)
+                            process_repayment(conn, member)
                         
                         break
                         
@@ -662,7 +662,7 @@ def add_repayment(conn):
                                 continue
 
                             else:
-                                process_payment(conn, borrower)
+                                process_repayment(conn, borrower)
 
                             break
 
