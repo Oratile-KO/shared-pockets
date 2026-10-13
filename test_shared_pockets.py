@@ -365,5 +365,56 @@ class TestTableCreation(unittest.TestCase):
         self.assertEqual(repayment_allocations['loan_id'], member_loan_db_id)
         self.assertEqual(repayment_allocations['amount'], repayment_amount)
 
+    def test_invalid_repayment_rollback(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Lebo','2026-09-13')
+                    """)
+
+        member_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, member_id, amount, date_issued, status)
+                        VALUES('L001', 'member', ?, 800, '2026-08-18', 'open')        
+                """, (member_db_id,))
+        
+        self.conn.commit()
+
+        amount = 250
+        allocations = [('L001', None)]
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            create_repayment(self.conn, amount, allocations)
+
+        repayment = self.conn.execute("""
+                        SELECT COUNT(*)
+                        FROM repayments
+                    """).fetchone()[0]
+
+        repayment_allocations  = self.conn.execute("""
+                                    SELECT COUNT(*)
+                                    FROM repayment_allocations
+                                """).fetchone()[0]
+
+        member = self.conn.execute("""
+                                        SELECT name
+                                        FROM members
+                            """).fetchone()
+        
+        loan = self.conn.execute("""
+                                        SELECT loan_id
+                                        FROM loans
+                            """).fetchone()
+
+        expected_name = 'Lebo'
+        expected_loan_id = 'L001'
+
+        self.assertEqual(repayment, 0)
+        self.assertEqual(repayment_allocations, 0)
+        self.assertEqual(member['name'], expected_name)
+        self.assertEqual(loan['loan_id'], expected_loan_id)
+        
 if __name__ == "__main__":
     unittest.main()
