@@ -491,7 +491,10 @@ def allocate_repayment(amount, loans):
     return allocations
 
 def create_repayment(conn, amount, allocations):
-    try:   
+    try: 
+        if not allocations:
+            raise ValueError("Allocations list cannot be empty!")
+
         repayment_id = generate_id(conn, "repayments", "repayment_id", "R")
         date_paid = datetime.now().strftime("%Y-%m-%d")
 

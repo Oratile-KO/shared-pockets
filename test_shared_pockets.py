@@ -415,6 +415,42 @@ class TestTableCreation(unittest.TestCase):
         self.assertEqual(repayment_allocations, 0)
         self.assertEqual(member['name'], expected_name)
         self.assertEqual(loan['loan_id'], expected_loan_id)
+
+    def test_create_payment_rejects_empty_repayment_allocations(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+
+        member_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, member_id, amount, date_issued, status)
+                        VALUES('L001', 'member', ?, 800, '2026-08-18', 'open')        
+                """, (member_db_id,))
+
+        self.conn.commit()
+
+        repayment_amount = 270
+        repayment_allocations = []
+
+        with self.assertRaises(ValueError):
+            create_repayment(self.conn, repayment_amount, repayment_allocations)
+
+        repayment_records = self.cursor.execute("""
+                                SELECT COUNT(*)
+                                FROM repayments
+                        """).fetchone()[0]
+                
+        repayment_allocations_records = self.cursor.execute("""
+                                                SELECT COUNT(*)
+                                                FROM repayment_allocations
+                                        """).fetchone()[0]
+
+        self.assertEqual(repayment_records, 0)
+        self.assertEqual(repayment_allocations_records, 0)
         
 if __name__ == "__main__":
     unittest.main()
