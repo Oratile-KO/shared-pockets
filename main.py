@@ -124,36 +124,52 @@ def view_members(conn):
         name = row["name"]
         print(f"{member_id:<13}{name:<15}")
 
+def get_member_db_id(conn, member_id):
+
+    member_db_id =  conn.execute(
+            "SELECT id FROM members WHERE member_id = ?",
+            (member_id,)
+        ).fetchone()
+
+    if member_db_id is None:
+        return None
+    
+    return member_db_id[0]
+
 def add_contribution(conn):
     while True:
-        member_db_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
-        if not member_db_id:
+        member_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
+
+        if not member_id:
             print("Member ID cannot be empty! Please try again.")
             continue
-        cursor = conn.execute(
-            "SELECT id FROM members WHERE member_id = ?",
-            (member_db_id,)
-        )
-        result = cursor.fetchone()
+        
+        result = get_member_db_id(conn, member_id)
+
         if result is None:
             print("Member ID not found! Please try again.")
             continue
-        member_id = result[0]
+
+        member_db_id = result
+
         while True:
             try:
                 amount = float(input(f"Enter amount member is contributing: ").strip()) 
+
                 if amount <= 0:
                         print("Enter amount greater that 0")
                         continue
+                
                 else:
                     break
+
             except ValueError:
                     print("Please enter a valid amount!")
 
         conn.execute("""
             INSERT INTO contributions (member_id, amount, date)
             VALUES (?, ?, ?)
-            """, (member_id, amount, datetime.now().strftime("%Y-%m-%d")))
+            """, (member_db_id, amount, datetime.now().strftime("%Y-%m-%d")))
 
         conn.commit()
         print("Contribution added successfully!")

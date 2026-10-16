@@ -1,5 +1,5 @@
-from main import allocate_repayment, validate_repayment, create_tables, create_repayment
-from unittest.mock import patch
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id
+from unittest.mock import patch, call
 import unittest, sqlite3
 
 
@@ -451,6 +451,148 @@ class TestTableCreation(unittest.TestCase):
 
         self.assertEqual(repayment_records, 0)
         self.assertEqual(repayment_allocations_records, 0)
+
+    def test_add_contribution_current_behavior(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
         
+        expected_member_db_id = self.cursor.lastrowid
+        
+        self.conn.commit()
+
+        with patch('builtins.input', side_effect=["M001", "200"]):
+            add_contribution(self.conn)
+
+        contributions = self.cursor.execute("""
+                                    SELECT member_id, amount
+                                    FROM contributions
+                                """).fetchall()[0]
+        
+        contributions_recorded = self.cursor.execute("""
+                                    SELECT COUNT(*)
+                                    FROM contributions
+                                """).fetchone()[0]
+
+        expected_amount = 200.0
+        expected_contributions_count = 1
+
+        self.assertEqual(expected_member_db_id, contributions['member_id'])
+        self.assertEqual(expected_amount, contributions['amount'])
+        self.assertEqual(expected_contributions_count, contributions_recorded)
+        
+    def test_add_contribution_invalid_member_then_valid_member(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+
+        expected_member_db_id = self.cursor.lastrowid
+        
+        self.conn.commit()
+
+        with patch('builtins.input', side_effect=["M002", "M001", "200"]) as mock_input:
+            with patch('builtins.print') as mock_print:
+                add_contribution(self.conn)
+
+        contributions = self.cursor.execute("""
+                                    SELECT member_id, amount
+                                    FROM contributions
+                                """).fetchall()[0]
+        
+        contributions_recorded = self.cursor.execute("""
+                                    SELECT COUNT(*)
+                                    FROM contributions
+                                """).fetchone()[0]
+
+        expected_amount = 200.0
+        expected_contributions_count = 1
+        expected_call_count =3
+
+        self.assertEqual(expected_member_db_id, contributions['member_id'])
+        self.assertEqual(expected_amount, contributions['amount'])
+        self.assertEqual(expected_contributions_count, contributions_recorded)
+        self.assertEqual(expected_call_count, mock_input.call_count)
+        self.assertEqual(
+            mock_print.call_args_list,
+            [
+                call('Member ID not found! Please try again.'),
+                call('Contribution added successfully!')
+            ]
+        )  
+
+    def test_add_contribution_member_id_normalization(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+        
+        expected_member_db_id = self.cursor.lastrowid
+        
+        self.conn.commit()
+
+        with patch('builtins.input', side_effect=["  m001  ", "200"]):
+            add_contribution(self.conn)
+
+        contributions = self.cursor.execute("""
+                                    SELECT member_id, amount
+                                    FROM contributions
+                                """).fetchall()[0]
+        
+        contributions_recorded = self.cursor.execute("""
+                                    SELECT COUNT(*)
+                                    FROM contributions
+                                """).fetchone()[0]
+
+        expected_amount = 200.0
+        expected_contributions_count = 1
+
+        self.assertEqual(expected_member_db_id, contributions['member_id'])
+        self.assertEqual(expected_amount, contributions['amount'])
+        self.assertEqual(expected_contributions_count, contributions_recorded)
+
+    def test_get_member_db_id_with_valid_member(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+        
+        expected_member_db_id = self.cursor.lastrowid
+
+        self.conn.commit()
+
+        member_id = 'M001'
+
+        returned_member_db_id = get_member_db_id(self.conn, member_id)
+
+        self.assertEqual(returned_member_db_id, expected_member_db_id)
+
+    def test_get_member_db_id_with_invalid_member(self):
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+
+        self.conn.commit()
+        
+        member_id = 'M999'
+        
+        expected_member_db_id = None
+
+        returned_member_db_id = get_member_db_id(self.conn, member_id)
+
+        self.assertEqual(returned_member_db_id, expected_member_db_id)
+
 if __name__ == "__main__":
     unittest.main()
