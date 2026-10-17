@@ -1,4 +1,4 @@
-from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id
 from unittest.mock import patch, call
 import unittest, sqlite3
 
@@ -613,6 +613,66 @@ class TestTableCreation(unittest.TestCase):
         contribution_amount = validate_contribution_amount(amount)
 
         self.assertEqual(expected_amount, contribution_amount)
+
+    def test_valid_member_db_id(self):
+        
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+
+        expected_member_db_id = self.cursor.lastrowid
+
+        self.conn.commit()
+
+        with patch('builtins.input', return_value="M001"):
+            member_db_id = prompt_member_id(self.conn)
+
+        self.assertEqual(member_db_id, expected_member_db_id) 
+
+    def test_reprompts_after_empty_member_id(self):
+        
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+
+        expected_member_db_id = self.cursor.lastrowid
+
+        self.conn.commit()
+
+        with patch('builtins.input', side_effect=[' ', 'M001']) as mock_input:
+            with patch('builtins.print') as mock_print:
+                member_db_id = prompt_member_id(self.conn)
+
+        self.assertEqual(member_db_id, expected_member_db_id) 
+        self.assertEqual(mock_input.call_count, 2)
+        mock_print.assert_called_once_with('Member ID cannot be empty! Please try again.')
+
+    def test_reprompts_after_member_id_no_tfound(self):
+        
+        create_tables(self.conn)
+
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+
+        expected_member_db_id = self.cursor.lastrowid
+
+        self.conn.commit()
+
+        with patch('builtins.input', side_effect=['M999', 'M001']) as mock_input:
+            with patch('builtins.print') as mock_print:
+                member_db_id = prompt_member_id(self.conn)
+
+        self.assertEqual(member_db_id, expected_member_db_id) 
+        self.assertEqual(mock_input.call_count, 2)
+        mock_print.assert_called_once_with('Member ID not found! Please try again.')
 
 if __name__ == "__main__":
     unittest.main()

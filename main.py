@@ -136,6 +136,25 @@ def get_member_db_id(conn, member_id):
     
     return member_db_id[0]
 
+def prompt_member_id(conn):
+    while True:
+        member_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
+
+        if not member_id:
+            print("Member ID cannot be empty! Please try again.")
+            continue
+
+        result = get_member_db_id(conn, member_id)
+    
+        if result is None:
+            print("Member ID not found! Please try again.")
+            continue
+    
+        member_db_id = result
+        break
+
+    return member_db_id
+
 def validate_contribution_amount(amount):
     try:
         contribution_amount = float(amount)
@@ -149,40 +168,27 @@ def validate_contribution_amount(amount):
     return contribution_amount
 
 def add_contribution(conn):
+    
+    member_db_id = prompt_member_id(conn)
+
     while True:
-        member_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
+        amount = input(f"Enter amount member is contributing: ").strip()
 
-        if not member_id:
-            print("Member ID cannot be empty! Please try again.")
-            continue
-        
-        result = get_member_db_id(conn, member_id)
+        try:
+            contribution_amount = validate_contribution_amount(amount)
+            break
 
-        if result is None:
-            print("Member ID not found! Please try again.")
+        except ValueError as e:
+            print(e)
             continue
 
-        member_db_id = result
+    conn.execute("""
+        INSERT INTO contributions (member_id, amount, date)
+        VALUES (?, ?, ?)
+        """, (member_db_id, contribution_amount, datetime.now().strftime("%Y-%m-%d")))
 
-        while True:
-            amount = input(f"Enter amount member is contributing: ").strip()
-
-            try:
-                contribution_amount = validate_contribution_amount(amount)
-                break
-
-            except ValueError as e:
-                print(e)
-                continue
-
-        conn.execute("""
-            INSERT INTO contributions (member_id, amount, date)
-            VALUES (?, ?, ?)
-            """, (member_db_id, contribution_amount, datetime.now().strftime("%Y-%m-%d")))
-
-        conn.commit()
-        print("Contribution added successfully!")
-        break 
+    conn.commit()
+    print("Contribution added successfully!")
 
 def view_contributions(conn):
     cursor = conn.execute("""
