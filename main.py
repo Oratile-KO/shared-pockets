@@ -136,6 +136,18 @@ def get_member_db_id(conn, member_id):
     
     return member_db_id[0]
 
+def validate_contribution_amount(amount):
+    try:
+        contribution_amount = float(amount)
+
+    except ValueError as e:
+        raise ValueError("Invalid amount. Please enter a numeric value!") from e
+
+    if contribution_amount <= 0:
+        raise ValueError("Amount must be greater than R0, please try again!")
+    
+    return contribution_amount
+
 def add_contribution(conn):
     while True:
         member_id = input("Enter Member ID of the member contributing: ").strip().capitalize()
@@ -153,23 +165,20 @@ def add_contribution(conn):
         member_db_id = result
 
         while True:
+            amount = input(f"Enter amount member is contributing: ").strip()
+
             try:
-                amount = float(input(f"Enter amount member is contributing: ").strip()) 
+                contribution_amount = validate_contribution_amount(amount)
+                break
 
-                if amount <= 0:
-                        print("Enter amount greater that 0")
-                        continue
-                
-                else:
-                    break
-
-            except ValueError:
-                    print("Please enter a valid amount!")
+            except ValueError as e:
+                print(e)
+                continue
 
         conn.execute("""
             INSERT INTO contributions (member_id, amount, date)
             VALUES (?, ?, ?)
-            """, (member_db_id, amount, datetime.now().strftime("%Y-%m-%d")))
+            """, (member_db_id, contribution_amount, datetime.now().strftime("%Y-%m-%d")))
 
         conn.commit()
         print("Contribution added successfully!")

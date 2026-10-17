@@ -1,4 +1,4 @@
-from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount
 from unittest.mock import patch, call
 import unittest, sqlite3
 
@@ -593,6 +593,26 @@ class TestTableCreation(unittest.TestCase):
         returned_member_db_id = get_member_db_id(self.conn, member_id)
 
         self.assertEqual(returned_member_db_id, expected_member_db_id)
+
+    def test_reject_contribution_amount_below_limit(self):
+        amount = '0.0'
+
+        with self.assertRaisesRegex(ValueError, 'Amount must be greater than R0, please try again!'):
+            validate_contribution_amount(amount)
+
+    def test_reject_invalid_contribution_amount_custom_message(self):
+        amount = 'abc'
+    
+        with self.assertRaisesRegex(ValueError, 'Invalid amount. Please enter a numeric value!'):
+            validate_contribution_amount(amount)
+
+    def test_accept_valid_contribution_amount(self):
+        amount = '234.60'
+        expected_amount = 234.6
+
+        contribution_amount = validate_contribution_amount(amount)
+
+        self.assertEqual(expected_amount, contribution_amount)
 
 if __name__ == "__main__":
     unittest.main()
