@@ -654,7 +654,6 @@ class TestTableCreation(unittest.TestCase):
         mock_print.assert_called_once_with('Member ID cannot be empty! Please try again.')
 
     def test_reprompts_after_member_id_no_tfound(self):
-        
         create_tables(self.conn)
 
         self.cursor.execute("""
@@ -674,5 +673,45 @@ class TestTableCreation(unittest.TestCase):
         self.assertEqual(mock_input.call_count, 2)
         mock_print.assert_called_once_with('Member ID not found! Please try again.')
 
+    def test_invalid_amount_then_valid_amount_in_full_function(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+        
+        expected_member_db_id = self.cursor.lastrowid
+        
+        self.conn.commit()
+
+        with patch('builtins.input', side_effect=['M001', 'abc', '200']) as mock_input:
+            with patch('builtins.print') as mock_print:
+                add_contribution(self.conn)
+
+        expected_contribution_amount = 200.0
+        expected_contributions_count = 1
+
+        number_of_contributions = self.cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM contributions
+            """).fetchone()[0]
+        
+        contributions = self.cursor.execute("""
+                    SELECT member_id, amount
+                    FROM contributions
+            """).fetchall()[0]
+
+        self.assertEqual(mock_input.call_count, 3)
+        self.assertEqual(number_of_contributions, expected_contributions_count)
+        self.assertEqual(contributions['amount'], expected_contribution_amount)
+        self.assertEqual(contributions['member_id'], expected_member_db_id)
+        self.assertEqual(
+            mock_print.call_args_list,
+            [
+                call('Invalid amount. Please enter a numeric value!'),
+                call('Contribution added successfully!')]
+        )
+            
 if __name__ == "__main__":
     unittest.main()

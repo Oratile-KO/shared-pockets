@@ -179,7 +179,7 @@ def add_contribution(conn):
             break
 
         except ValueError as e:
-            print(e)
+            print(str(e))
             continue
 
     conn.execute("""
