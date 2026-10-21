@@ -167,12 +167,9 @@ def validate_contribution_amount(amount):
     
     return contribution_amount
 
-def add_contribution(conn):
-    
-    member_db_id = prompt_member_id(conn)
-
+def prompt_contribution_amount():
     while True:
-        amount = input(f"Enter amount member is contributing: ").strip()
+        amount = input("Enter amount member is contributing: ").strip()
 
         try:
             contribution_amount = validate_contribution_amount(amount)
@@ -181,14 +178,27 @@ def add_contribution(conn):
         except ValueError as e:
             print(str(e))
             continue
+        
+    return contribution_amount
 
-    conn.execute("""
-        INSERT INTO contributions (member_id, amount, date)
-        VALUES (?, ?, ?)
-        """, (member_db_id, contribution_amount, datetime.now().strftime("%Y-%m-%d")))
+def add_contribution(conn):
+    
+    member_db_id = prompt_member_id(conn)
+    
+    contribution_amount = prompt_contribution_amount()
 
-    conn.commit()
-    print("Contribution added successfully!")
+    try:
+        conn.execute("""
+            INSERT INTO contributions (member_id, amount, date)
+            VALUES (?, ?, ?)
+            """, (member_db_id, contribution_amount, datetime.now().strftime("%Y-%m-%d")))
+
+        conn.commit()
+        print("Contribution added successfully!")
+
+    except sqlite3.Error:
+        conn.rollback()
+        raise
 
 def view_contributions(conn):
     cursor = conn.execute("""

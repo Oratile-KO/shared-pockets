@@ -1,5 +1,5 @@
-from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id
-from unittest.mock import patch, call
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id, prompt_contribution_amount
+from unittest.mock import patch, call, Mock
 import unittest, sqlite3
 
 
@@ -712,6 +712,56 @@ class TestTableCreation(unittest.TestCase):
                 call('Invalid amount. Please enter a numeric value!'),
                 call('Contribution added successfully!')]
         )
-            
+
+    def test_add_contribution_database_error_rollback(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+        
+        expected_member_db_id = self.cursor.lastrowid
+        
+        self.conn.commit()
+
+        self.cursor.execute("""
+                CREATE TRIGGER insert_contribution
+                BEFORE INSERT ON contributions
+                BEGIN
+                    SELECT RAISE(ABORT, 'Simulated contribution failure');
+                END;
+        """)
+
+        database = Mock(wraps=self.conn)
+
+        with patch('builtins.input', side_effect=["M001", "215"]) as mock_input:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, 'Simulated contribution failure'):
+                add_contribution(database) 
+
+        member_name = 'Mosa'
+
+        members = self.cursor.execute("""
+                SELECT id, name
+                FROM members
+            """).fetchall()[0]
+
+        members_count = self.cursor.execute("""
+                SELECT COUNT(*)
+                FROM members    
+            """).fetchone()[0]
+
+        contributions_count = self.cursor.execute("""
+                SELECT COUNT(*)
+                FROM contributions
+            """).fetchone()[0]
+
+        database.rollback.assert_called_once()
+        self.assertEqual(mock_input.call_count, 2)
+        self.assertEqual(members_count, 1)
+        self.assertEqual(contributions_count, 0)
+        self.assertEqual(members["id"], expected_member_db_id)
+        self.assertEqual(members["name"], member_name)
+         
 if __name__ == "__main__":
     unittest.main()
