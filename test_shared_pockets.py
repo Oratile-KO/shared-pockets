@@ -1,4 +1,4 @@
-from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id, prompt_contribution_amount
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id, insert_contribution
 from unittest.mock import patch, call, Mock
 import unittest, sqlite3
 
@@ -762,6 +762,85 @@ class TestTableCreation(unittest.TestCase):
         self.assertEqual(contributions_count, 0)
         self.assertEqual(members["id"], expected_member_db_id)
         self.assertEqual(members["name"], member_name)
+
+    def test_valid_insert_contributions(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+        
+        member_db_id = self.cursor.lastrowid
+        
+        self.conn.commit()
+
+        amount = 250
+
+        date = '2026-09-01'
+
+        insert_contribution(self.conn, member_db_id, amount, date)
+
+        contributions = self.cursor.execute("""
+                SELECT member_id, amount, date
+                FROM contributions            
+        """).fetchone()
+
+        contributions_count = self.cursor.execute("""
+                SELECT COUNT(*)
+                FROM contributions            
+        """).fetchone()[0]
+
+        self.assertEqual(contributions['member_id'], member_db_id)        
+        self.assertEqual(contributions['amount'], amount)        
+        self.assertEqual(contributions['date'], date)  
+        self.assertEqual(contributions_count, 1)  
          
+    def test_insert_contributions_rollback(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+        
+        member_db_id = self.cursor.lastrowid
+        
+        self.conn.commit()
+
+        amount = 250
+
+        date = '2026-09-01'
+
+        member_name  = 'Mosa' 
+
+        self.cursor.execute("""
+                CREATE TRIGGER insert_contribution
+                BEFORE INSERT ON contributions
+                BEGIN
+                    SELECT RAISE(ABORT, 'Simulated contribution failure');
+                END;
+        """)
+
+        database = Mock(wraps=self.conn)
+
+        with self.assertRaisesRegex(sqlite3.IntegrityError, 'Simulated contribution failure'):
+            insert_contribution(database, member_db_id, amount, date)
+
+        contributions_count = self.cursor.execute("""
+                SELECT COUNT(*)
+                FROM contributions            
+        """).fetchone()[0]
+
+        members = self.cursor.execute("""
+                        SELECT id, name
+                        FROM members
+                    """).fetchall()[0]
+
+        database.rollback.assert_called_once()
+        self.assertEqual(contributions_count, 0)
+        self.assertEqual(members["id"], member_db_id)
+        self.assertEqual(members["name"], member_name)
+
 if __name__ == "__main__":
     unittest.main()
