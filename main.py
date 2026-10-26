@@ -481,6 +481,7 @@ def display_loans_and_calc_balance(table_name):
     print_separator(75)
     
     outstanding_balance = 0
+    
     for loan in table_name:
         loan_id = loan["loan_id"]
         original_loan_amount = loan["original"]
@@ -585,6 +586,40 @@ def process_repayment(conn, loans):
     
     print("Repayment successfully logged!")
 
+def find_borrowers_with_outstanding_loans(conn, table, column):
+
+    query = f"""SELECT {table}.id as 'db_id', {table}.{column}_id as '{column}_id', {table}.name as 'name'
+                        FROM {table}
+                        WHERE EXISTS (
+                            SELECT 1
+                            FROM loans
+                            LEFT JOIN repayment_allocations
+                                on loans.id = repayment_allocations.loan_id
+                            WHERE loans.{column}_id = {table}.id
+                            GROUP BY loans.id, loans.amount
+                            HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                            )"""
+
+    outstanding_loans = conn.execute(query).fetchall()
+
+    return outstanding_loans
+
+def find_outstanding_loans_for_person(conn, table, column, borrower_id):
+    query = f"""SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date', {table}.id as 'db_id', {table}.name as 'name'
+                FROM loans
+                JOIN {table}    
+                    ON loans.{column}_id = {table}.id
+                LEFT JOIN repayment_allocations
+                    ON loans.id = repayment_allocations.loan_id	
+                WHERE {table}.{column}_id = ?
+                GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
+                HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
+                ORDER BY loans.date_issued ASC, loans.id ASC"""
+
+    borrower_outstanding_loans = conn.execute(query, (borrower_id,)).fetchall()
+
+    return borrower_outstanding_loans
+      
 def add_repayment(conn):
     while True:
         try:
@@ -596,22 +631,9 @@ def add_repayment(conn):
 
         try:
             if borrower_type == 1:
-                cursor = conn.execute("""
-                        SELECT  id as 'db_id', member_id as 'member_id', members.name as 'name'
-                        FROM members
-                        WHERE EXISTS (
-                            SELECT 1
-                            FROM loans
-                            LEFT JOIN repayment_allocations
-                                on loans.id = repayment_allocations.loan_id
-                            WHERE loans.member_id = members.id
-                            GROUP BY loans.id, loans.amount
-                            HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
-                            )
-                    """)
-                members = cursor.fetchall()
+                members_with_outstanding_loans = find_borrowers_with_outstanding_loans(conn, 'members', 'member') 
 
-                if not members:
+                if not members_with_outstanding_loans:
                     print("There are no members with outstanding loans.")
                     continue
 
@@ -619,7 +641,7 @@ def add_repayment(conn):
                     print(f"AVAILABLE MEMBERS: \n{'Member ID':<13}{'Name':<17}")
                     print_separator(45)
 
-                    for row in members:
+                    for row in members_with_outstanding_loans:
                         member_id = row['member_id']
                         name = row['name']
                         print(f"{member_id:<13}{name:<17}")
@@ -632,54 +654,28 @@ def add_repayment(conn):
                         continue
 
                     else:
-                        cursor = conn.execute("""
-                                        SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date', members.id as 'db_id', members.name as 'name'
-                                        FROM loans
-                                        JOIN members    
-                                            ON loans.member_id = members.id
-                                        LEFT JOIN repayment_allocations
-                                            ON loans.id = repayment_allocations.loan_id	
-                                        WHERE members.member_id = ?
-                                        GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
-                                        HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
-                                        ORDER BY loans.date_issued ASC, loans.id ASC    
-                                            """, (member_id,))
-                        
-                        member = cursor.fetchall()
+                        member_outstanding_loans = find_outstanding_loans_for_person(conn, 'members', 'member', member_id)
 
-                        if not member:
+                        if not member_outstanding_loans:
                             print(f"Member ID '{member_id}' has no outstanding loans, please try again!")
                             continue
 
                         else:
-                            process_repayment(conn, member)
+                            process_repayment(conn, member_outstanding_loans)
                         
                         break
                         
             elif borrower_type == 2:
-                    cursor = conn.execute("""
-                            SELECT  id as 'db_id', borrower_id as 'borrower_id', name as 'name'
-                            FROM borrowers
-                            WHERE EXISTS (
-                                SELECT 1
-                                FROM loans
-                                LEFT JOIN repayment_allocations
-                                    on loans.id = repayment_allocations.loan_id
-                                WHERE loans.borrower_id = borrowers.id
-                                GROUP BY loans.id, loans.amount
-                                HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
-                                )
-                        """)
-                    borrowers = cursor.fetchall()
+                    borrowers_with_outstanding_loans = find_borrowers_with_outstanding_loans(conn, 'borrowers', 'borrower')
 
-                    if not borrowers:
+                    if not borrowers_with_outstanding_loans:
                         print("There are no borrowers with outstanding loans.")
                         continue
 
                     else:  
                         print(f"AVAILABLE BORROWERS: \n{'borrower ID':<13}{'Name':<17}")
 
-                        for row in borrowers:
+                        for row in borrowers_with_outstanding_loans:
                             borrower_id = row['borrower_id']
                             name = row['name']
                             print(f"{borrower_id:<13}{name:<17}")
@@ -692,27 +688,14 @@ def add_repayment(conn):
                             continue
 
                         else:
-                            cursor = conn.execute("""
-                                            SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date', borrowers.id as 'db_id', borrowers.name as 'name'
-                                            FROM loans
-                                            JOIN borrowers
-                                                ON loans.borrower_id = borrowers.id
-                                            LEFT JOIN repayment_allocations
-                                                ON loans.id = repayment_allocations.loan_id	
-                                            WHERE borrowers.borrower_id = ?
-                                            GROUP BY loans.id, loans.loan_id, loans.amount, loans.date_issued
-                                            HAVING loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) > 0
-                                            ORDER BY loans.date_issued ASC, loans.id ASC    
-                                                """, (borrower_id,))
-                            
-                            borrower = cursor.fetchall()
+                            borrower_outstanding_loans = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', borrower_id)
 
-                            if not borrower:
-                                print(f"borrower ID '{borrower_id}' has no outstanding loans, please try again!")
+                            if not borrower_outstanding_loans:
+                                print(f"Borrower ID '{borrower_id}' has no outstanding loans, please try again!")
                                 continue
 
                             else:
-                                process_repayment(conn, borrower)
+                                process_repayment(conn, borrower_outstanding_loans)
 
                             break
 

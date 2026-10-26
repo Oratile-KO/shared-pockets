@@ -1,6 +1,7 @@
-from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id, insert_contribution
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id, insert_contribution, add_repayment, find_borrowers_with_outstanding_loans, find_outstanding_loans_for_person
 from unittest.mock import patch, call, Mock
 import unittest, sqlite3
+import pytest
 
 
 class TestAllocateRepayment(unittest.TestCase):
@@ -842,5 +843,331 @@ class TestTableCreation(unittest.TestCase):
         self.assertEqual(members["id"], member_db_id)
         self.assertEqual(members["name"], member_name)
 
+    def test_member_with_outstanding_loan(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO members(member_id, name, date_joined)
+                        VALUES('M001', 'Mosa','2026-09-13')
+                    """)
+        
+        member_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, member_id, amount, date_issued, status)
+                        VALUES('L001', 'member', ?, 4500, '2026-06-18', 'open')        
+                """, (member_db_id,))
+        
+        self.conn.commit()
+        
+        result = find_borrowers_with_outstanding_loans(self.conn, 'members', 'member')
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["db_id"], member_db_id)
+        self.assertEqual(result[0]["member_id"], "M001")
+        self.assertEqual(result[0]["name"], "Mosa")
+
+    def test_external_borrower_with_outstanding_loan(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO borrowers(borrower_id, name)
+                        VALUES('B001', 'Kano')
+                    """)
+        
+        borrower_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, borrower_id, amount, date_issued, status)
+                        VALUES('L001', 'external', ?, 4500, '2026-06-18', 'open')        
+                """, (borrower_db_id,))
+        
+        self.conn.commit()
+        
+        result = find_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["db_id"], borrower_db_id)
+        self.assertEqual(result[0]["borrower_id"], "B001")
+        self.assertEqual(result[0]["name"], "Kano")
+
+    def test_borrower_with_fully_repaid_loan(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO borrowers(borrower_id, name)
+                        VALUES('B001', 'Kano')
+                    """)
+        
+        borrower_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, borrower_id, amount, date_issued, status)
+                        VALUES('L001', 'external', ?, 4500, '2026-06-18', 'open')        
+                """, (borrower_db_id,))
+        
+        loan_db_id = self.cursor.lastrowid
+        
+        self.cursor.execute("""
+                        INSERT INTO repayments(repayment_id, amount, date)
+                        VALUES('R001', 4500, '2026-07-09')        
+                """)
+        
+        repayment_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO repayment_allocations(repayment_id, loan_id, amount)
+                        VALUES(?, ?, 4500)        
+                """, (repayment_db_id, loan_db_id))
+
+        self.conn.commit()
+
+        result = find_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
+
+        self.assertEqual(len(result), 0)
+
+    def test_borrower_with_multiple_loans_outstanding(self):
+        create_tables(self.conn)
+        
+        self.cursor.execute("""
+                        INSERT INTO borrowers(borrower_id, name)
+                        VALUES('B001', 'Kano')
+                    """)
+        
+        borrower_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, borrower_id, amount, date_issued, status)
+                        VALUES('L001', 'external', ?, 4500, '2026-06-18', 'open')        
+                """, (borrower_db_id,))
+
+        first_loan_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO loans(loan_id, borrower_type, borrower_id, amount, date_issued, status)
+                        VALUES('L002', 'external', ?, 2000, '2026-07-01', 'open')        
+                """, (borrower_db_id,))
+        
+        second_loan_db_id = self.cursor.lastrowid
+        
+        self.cursor.execute("""
+                        INSERT INTO repayments(repayment_id, amount, date)
+                        VALUES('R001', 4500, '2026-07-09')        
+                """)
+
+        first_repayment_db_id = self.cursor.lastrowid
+        
+        self.cursor.execute("""
+                        INSERT INTO repayments(repayment_id, amount, date)
+                        VALUES('R002', 500, '2026-07-19')        
+                """)
+        
+        second_repayment_db_id = self.cursor.lastrowid
+
+        self.cursor.execute("""
+                        INSERT INTO repayment_allocations(repayment_id, loan_id, amount)
+                        VALUES(?, ?, 4500)        
+                """, (first_repayment_db_id, first_loan_db_id))
+
+        self.cursor.execute("""
+                        INSERT INTO repayment_allocations(repayment_id, loan_id, amount)
+                        VALUES(?, ?, 500)        
+                """, (second_repayment_db_id, second_loan_db_id))
+        
+        self.conn.commit()
+
+        result = find_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['borrower_id'], 'B001')
+        self.assertEqual(result[0]['name'], 'Kano')
+
+@pytest.fixture
+
+def conn():
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+
+    create_tables(connection)
+
+    yield connection
+
+    connection.close()
+
+def test_partially_repaid_loan(conn):
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO borrowers (borrower_id, name)
+        VALUES ('B001', 'Kano')
+    """)
+
+    borrower_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO loans (
+            loan_id, borrower_type, borrower_id,
+            amount, date_issued, status
+        )
+        VALUES ('L001', 'external', ?, 4500, '2026-06-18', 'open')
+    """, (borrower_db_id,))
+
+    loan_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO repayments (repayment_id, amount, date)
+        VALUES ('R001', 500, '2026-07-09')
+    """)
+
+    repayment_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO repayment_allocations (
+            repayment_id, loan_id, amount
+        )
+        VALUES (?, ?, 500)
+    """, (repayment_db_id, loan_db_id))
+
+    conn.commit()
+
+    results = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', 'B001')
+
+    assert len(results) == 1
+    assert results[0]['db_id'] == borrower_db_id
+    assert results[0]['loan_id'] == 'L001'
+    assert results[0]['name'] == 'Kano'
+    assert results[0]['original'] == 4500
+    assert results[0]['repaid'] == 500
+    assert results[0]['outstanding'] == 4000
+
+def test_fully_repaid_loan(conn):
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO borrowers (borrower_id, name)
+        VALUES ('B001', 'Kano')
+    """)
+
+    borrower_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO loans (
+            loan_id, borrower_type, borrower_id,
+            amount, date_issued, status
+        )
+        VALUES ('L001', 'external', ?, 4500, '2026-06-18', 'open')
+    """, (borrower_db_id,))
+
+    loan_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO repayments (repayment_id, amount, date)
+        VALUES ('R001', 4500, '2026-07-09')
+    """)
+
+    repayment_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO repayment_allocations (
+            repayment_id, loan_id, amount
+        )
+        VALUES (?, ?, 4500)
+    """, (repayment_db_id, loan_db_id))
+
+    conn.commit()
+
+    results = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', 'B001')
+
+    assert len(results) == 0
+
+def test_outstanding_loans_fifo_order(conn):
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO borrowers (borrower_id, name)
+        VALUES ('B001', 'Kano')
+    """)
+
+    borrower_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO loans (
+            loan_id, borrower_type, borrower_id,
+            amount, date_issued, status
+        )
+        VALUES ('L002', 'external', ?, 2000, '2026-07-01', 'open')
+    """, (borrower_db_id,))
+
+    cursor.execute("""
+        INSERT INTO loans (
+            loan_id, borrower_type, borrower_id,
+            amount, date_issued, status
+        )
+        VALUES ('L001', 'external', ?, 4500, '2026-06-18', 'open')
+    """, (borrower_db_id,))
+
+    conn.commit()
+
+    results = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', 'B001')
+
+    assert len(results) == 2
+    assert [(loan['loan_id'], loan['original']) for loan in results] == [
+        ("L001", 4500.0),
+        ("L002", 2000.0)
+    ]
+
+def test_add_repayment_current_behaviour(conn, monkeypatch):
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO borrowers (borrower_id, name)
+        VALUES ('B001', 'Kano')
+    """)
+
+    borrower_db_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO loans (
+            loan_id, borrower_type, borrower_id,
+            amount, date_issued, status
+        )
+        VALUES ('L001', 'external', ?, 4500, '2026-06-18', 'open')
+    """, (borrower_db_id,))
+
+    loan_db_id = cursor.lastrowid
+
+    conn.commit()
+
+    inputs = iter(['2', 'B001', '2560', '3'])
+    
+    monkeypatch.setattr('builtins.input', lambda _: next(inputs))
+    add_repayment(conn)
+    
+    repayment = conn.execute("""
+        SELECT amount FROM repayments
+    """).fetchone()
+
+    allocation = conn.execute("""
+        SELECT loan_id, amount FROM repayment_allocations
+    """).fetchone()
+
+    assert repayment["amount"] == 2560
+    assert allocation["loan_id"] == loan_db_id
+    assert allocation["amount"] == 2560
+
+    results = conn.execute("""
+        SELECT
+        loans.amount - COALESCE(SUM(repayment_allocations.amount), 0)
+            AS outstanding
+        FROM loans
+        LEFT JOIN repayment_allocations
+            ON repayment_allocations.loan_id = loans.id
+        WHERE loans.id = ?
+        GROUP BY loans.id
+        """, (loan_db_id,)).fetchone()
+
+    assert results["outstanding"] == 1940.0
+
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main()  
