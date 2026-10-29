@@ -1,4 +1,4 @@
-from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id, insert_contribution, add_repayment, find_borrowers_with_outstanding_loans, find_outstanding_loans_for_person
+from main import allocate_repayment, validate_repayment, create_tables, create_repayment, add_contribution, get_member_db_id, validate_contribution_amount, prompt_member_id, insert_contribution, add_repayment, get_borrowers_with_outstanding_loans, get_outstanding_loans_for_borrower
 from unittest.mock import patch, call, Mock
 import unittest, sqlite3
 import pytest
@@ -135,7 +135,7 @@ class TestValidateRepayment(unittest.TestCase):
         self.assertEqual(mock_input.call_count, 2)
 
     def test_repayment_below_minimum_then_valid_repayment(self):
-        with patch('builtins.input', side_effect=["0.50", "200"]) as mock_input:
+        with patch('builtins.input', side_effect=["-1.50", "200"]) as mock_input:
             repayment_amount = validate_repayment("John", 500)
 
         self.assertEqual(repayment_amount, 200.0)
@@ -860,7 +860,7 @@ class TestTableCreation(unittest.TestCase):
         
         self.conn.commit()
         
-        result = find_borrowers_with_outstanding_loans(self.conn, 'members', 'member')
+        result = get_borrowers_with_outstanding_loans(self.conn, 'members', 'member')
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["db_id"], member_db_id)
@@ -884,7 +884,7 @@ class TestTableCreation(unittest.TestCase):
         
         self.conn.commit()
         
-        result = find_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
+        result = get_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["db_id"], borrower_db_id)
@@ -922,7 +922,7 @@ class TestTableCreation(unittest.TestCase):
 
         self.conn.commit()
 
-        result = find_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
+        result = get_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
 
         self.assertEqual(len(result), 0)
 
@@ -976,7 +976,7 @@ class TestTableCreation(unittest.TestCase):
         
         self.conn.commit()
 
-        result = find_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
+        result = get_borrowers_with_outstanding_loans(self.conn, 'borrowers', 'borrower')
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['borrower_id'], 'B001')
@@ -1031,7 +1031,7 @@ def test_partially_repaid_loan(conn):
 
     conn.commit()
 
-    results = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', 'B001')
+    results = get_outstanding_loans_for_borrower(conn, 'borrowers', 'borrower', 'B001')
 
     assert len(results) == 1
     assert results[0]['db_id'] == borrower_db_id
@@ -1077,7 +1077,7 @@ def test_fully_repaid_loan(conn):
 
     conn.commit()
 
-    results = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', 'B001')
+    results = get_outstanding_loans_for_borrower(conn, 'borrowers', 'borrower', 'B001')
 
     assert len(results) == 0
 
@@ -1109,7 +1109,7 @@ def test_outstanding_loans_fifo_order(conn):
 
     conn.commit()
 
-    results = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', 'B001')
+    results = get_outstanding_loans_for_borrower(conn, 'borrowers', 'borrower', 'B001')
 
     assert len(results) == 2
     assert [(loan['loan_id'], loan['original']) for loan in results] == [

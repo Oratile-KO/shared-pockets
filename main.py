@@ -481,7 +481,7 @@ def display_loans_and_calc_balance(table_name):
     print_separator(75)
     
     outstanding_balance = 0
-    
+
     for loan in table_name:
         loan_id = loan["loan_id"]
         original_loan_amount = loan["original"]
@@ -499,8 +499,8 @@ def validate_repayment(borrower_name, outstanding_balance):
         try:
             repayment_amount = float(input(f"Enter amount {borrower_name} is repaying: ").strip())
     
-            if repayment_amount < 1:
-                print("Repayment amount cannot be below R1!, please try again!")
+            if repayment_amount < 0:
+                print("Repayment amount cannot be below R0!, please try again!")
                 continue
     
             elif repayment_amount > outstanding_balance:
@@ -586,7 +586,7 @@ def process_repayment(conn, loans):
     
     print("Repayment successfully logged!")
 
-def find_borrowers_with_outstanding_loans(conn, table, column):
+def get_borrowers_with_outstanding_loans(conn, table, column):
 
     query = f"""SELECT {table}.id as 'db_id', {table}.{column}_id as '{column}_id', {table}.name as 'name'
                         FROM {table}
@@ -604,7 +604,7 @@ def find_borrowers_with_outstanding_loans(conn, table, column):
 
     return outstanding_loans
 
-def find_outstanding_loans_for_person(conn, table, column, borrower_id):
+def get_outstanding_loans_for_borrower(conn, table, column, borrower_id):
     query = f"""SELECT loans.loan_id AS 'loan_id', loans.amount AS 'original', COALESCE((SUM(repayment_allocations.amount)), 0) AS 'repaid', loans.amount - COALESCE(SUM(repayment_allocations.amount), 0) AS 'outstanding', loans.date_issued as 'date', {table}.id as 'db_id', {table}.name as 'name'
                 FROM loans
                 JOIN {table}    
@@ -619,96 +619,134 @@ def find_outstanding_loans_for_person(conn, table, column, borrower_id):
     borrower_outstanding_loans = conn.execute(query, (borrower_id,)).fetchall()
 
     return borrower_outstanding_loans
-      
-def add_repayment(conn):
+
+
+def get_borrower_configs():
+    borrower_configs = {
+        1:{
+            "table_name" : "members"
+        },
+
+        2:{
+            "table_name" : "borrowers"
+        }
+    }
+
+    for option in borrower_configs.values():
+        table_name = option["table_name"]
+
+        option["column_name"] = table_name[:-1]
+        option["display_label"] = table_name.upper()
+
+    return borrower_configs
+
+borrower_configs = get_borrower_configs()
+
+def prompt_repayment_type():
+    repayment_type = int(input("Select borrower type: \n1. Member Repayment \n2. External Borrower Repayment \n3. Close\n").strip())
+
+    return repayment_type
+
+def validate_repayment_type():
     while True:
         try:
-            borrower_type = int(input("Select borrower type: \n1. Member Repayment \n2. External Borrower Repayment \n3. Close\n").strip())
+            repayment_type = prompt_repayment_type()
 
-        except ValueError:
-                print("Invalid input, please try again!")
+            if repayment_type < 1 or repayment_type > 3:
+                print("Invalid selection. Please choose an option between 1 and 3.")
                 continue
-
-        try:
-            if borrower_type == 1:
-                members_with_outstanding_loans = find_borrowers_with_outstanding_loans(conn, 'members', 'member') 
-
-                if not members_with_outstanding_loans:
-                    print("There are no members with outstanding loans.")
-                    continue
-
-                else:  
-                    print(f"AVAILABLE MEMBERS: \n{'Member ID':<13}{'Name':<17}")
-                    print_separator(45)
-
-                    for row in members_with_outstanding_loans:
-                        member_id = row['member_id']
-                        name = row['name']
-                        print(f"{member_id:<13}{name:<17}")
-
-                while True:
-                    member_id = input("Enter Member ID: ").strip().capitalize()
-
-                    if not member_id:
-                        print("Member ID cannot be blank!")
-                        continue
-
-                    else:
-                        member_outstanding_loans = find_outstanding_loans_for_person(conn, 'members', 'member', member_id)
-
-                        if not member_outstanding_loans:
-                            print(f"Member ID '{member_id}' has no outstanding loans, please try again!")
-                            continue
-
-                        else:
-                            process_repayment(conn, member_outstanding_loans)
-                        
-                        break
-                        
-            elif borrower_type == 2:
-                    borrowers_with_outstanding_loans = find_borrowers_with_outstanding_loans(conn, 'borrowers', 'borrower')
-
-                    if not borrowers_with_outstanding_loans:
-                        print("There are no borrowers with outstanding loans.")
-                        continue
-
-                    else:  
-                        print(f"AVAILABLE BORROWERS: \n{'borrower ID':<13}{'Name':<17}")
-
-                        for row in borrowers_with_outstanding_loans:
-                            borrower_id = row['borrower_id']
-                            name = row['name']
-                            print(f"{borrower_id:<13}{name:<17}")
-
-                    while True:
-                        borrower_id = input("Enter borrower ID: ").strip().capitalize()
-
-                        if not borrower_id:
-                            print("borrower ID cannot be blank!")
-                            continue
-
-                        else:
-                            borrower_outstanding_loans = find_outstanding_loans_for_person(conn, 'borrowers', 'borrower', borrower_id)
-
-                            if not borrower_outstanding_loans:
-                                print(f"Borrower ID '{borrower_id}' has no outstanding loans, please try again!")
-                                continue
-
-                            else:
-                                process_repayment(conn, borrower_outstanding_loans)
-
-                            break
-
-            elif borrower_type == 3:
-                break
 
             else:
-                print("Invalid selection, please try again!")
-                continue
+                break
+
+        except ValueError:
+            print("Invalid input, please try again!")
+            continue
+
+    return repayment_type
+
+def prompt_borrower_id(borrower_config):
+    person_id = input(f"Enter {borrower_config['column_name'].capitalize()} ID or Enter '0' to go back: ").strip().capitalize()
+
+    return person_id  
+
+def display_borrowers_with_outstanding_loans(people_with_outstanding_loans, borrower_config):
+    print(f"AVAILABLE {borrower_config['display_label']}: \n{borrower_config['column_name'].capitalize() + ' ID' :<12}{'Name':<17}")
+
+    print_separator(45)
+
+    for row in people_with_outstanding_loans:
+        person_id = row[f"{borrower_config['column_name']}_id"]
+        name = row["name"]
+        print(f"{person_id:<12}{name:<17}")
+
+def validate_borrowers_with_outstanding_loans(conn, borrower_config):
+    borrowers_with_outstanding_loans = get_borrowers_with_outstanding_loans(conn, borrower_config['table_name'], borrower_config['column_name'])
+    
+    if not borrowers_with_outstanding_loans:
+        raise ValueError(f"There are no {borrower_config['table_name']} with outstanding loans.")
+
+    return borrowers_with_outstanding_loans
+
+def validate_borrower_id(borrower_config):
+    while True:
+        borrower_id = prompt_borrower_id(borrower_config)  
+
+        if not borrower_id:
+            print(f"{borrower_config['column_name'].capitalize()} ID cannot be blank, please try again!")
+            continue
+
+        break
+
+    return borrower_id
+
+def validate_outstanding_loans_for_borrower(conn, borrower_config, borrower_id):
+    borrower_outstanding_loans = get_outstanding_loans_for_borrower(conn, borrower_config['table_name'], borrower_config['column_name'], borrower_id)
+
+    if not borrower_outstanding_loans:
+        raise ValueError(f"{borrower_config['column_name'].capitalize()} ID '{borrower_id}' has no outstanding loans, please try again!")
+    
+    return borrower_outstanding_loans
+    
+def record_repayment(conn, borrower_config):
+    while True:
+        try:
+            borrowers_with_outstanding_loans = validate_borrowers_with_outstanding_loans(conn, borrower_config)
+            
+        except ValueError as e:
+            print(e)
+            break
+        
+        display_borrowers_with_outstanding_loans(borrowers_with_outstanding_loans, borrower_config)
+
+        borrower_id = validate_borrower_id(borrower_config)
+
+        if borrower_id == '0':
+            break
+
+        try:
+            borrower_outstanding_loans = validate_outstanding_loans_for_borrower(conn, borrower_config, borrower_id)
+        
+        except ValueError as e:
+            print(e)
+            continue
+        
+        process_repayment(conn, borrower_outstanding_loans)
+        break
+
+def add_repayment(conn):
+    while True:
+        
+        repayment_type = validate_repayment_type()
+
+        if repayment_type == 3:
+            break
+
+        try:
+            record_repayment(conn, borrower_configs[repayment_type])
 
         except sqlite3.Error as e:
             print(f"Database error: {e}")
-            continue
 
 def view_repayments(conn):
     cursor = conn.execute("""
@@ -792,6 +830,7 @@ def settlements(conn):
                     ) as total_repayments
                 FROM members
         """)
+    
     settlements = cursor.fetchall()
 
     print(f"{'Member ID':<15}{'Name':<17}{'Contributions':<15}{'Loans':<17}{'Repayments':<16}{'Outstanding Loan':<19}{'Settlement':<16}{'Remaining Debt':<}")
