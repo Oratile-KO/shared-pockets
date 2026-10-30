@@ -288,6 +288,98 @@ def create_loan(conn, db_id, borrower_type, amount):
 
     conn.commit()
 
+
+def get_borrower_config():
+    return input("Please select borrower type: \n1. Member \n2. External Borrower \n3. Close\n").strip()
+
+def validate_borrower_config():
+    try:
+        borrower_config = int(get_borrower_config())
+
+    except ValueError as e:
+        raise ValueError("Invalid input, please enter either '1', '2' or '3'!") from e
+
+    if borrower_config < 1 or borrower_config > 3:
+        raise ValueError("Invalid input, please enter either '1', '2' or '3'!")
+
+    return borrower_config
+
+def get_valid_borrower_config():
+    return validate_borrower_config()
+
+def get_existing_borrowers(conn, borrower_config):
+    query = f"""SELECT {borrower_config['column_name']}_id as "{borrower_config['column_name']}_id", name as "name" 
+                FROM {borrower_config['table_name']}"""
+    
+    existing_borrowers = conn.execute(query).fetchall()
+
+    return existing_borrowers
+
+def validate_existing_borrowers(conn, borrower_config):
+    borrowers = get_existing_borrowers(conn, borrower_config)
+
+    if not borrowers:
+        raise ValueError(f"No {borrower_config['table_name']} have been added yet.")
+    
+    return borrowers
+
+def display_borrowers(conn, borrower_config):
+    borrowers = validate_existing_borrowers(conn, borrower_config)
+    
+    print(f"{borrower_config['column_name'].capitalize() + ' ID':<13}{'Name':<15}")
+    print_separator(25)
+
+    for row in borrowers:
+        borrower_id = row[f"{borrower_config['column_name']}_id"]
+        name = row["name"]
+        print(f"{borrower_id:<13}{name:<15}")
+    
+def get_borrower_id(borrower_config): 
+    return input(f"Enter {borrower_config['column_name'].capitalize()} ID of {borrower_config['column_name']} taking a loan: ").strip().capitalize()
+
+def validate_borrower_record(conn, borrower_id, borrower_config):
+    query = f"""
+                SELECT id as "db_id", {borrower_config['column_name']}_id as "{borrower_config['column_name']}_id", name as "name"
+                FROM {borrower_config['table_name']}
+                WHERE {borrower_config['column_name']}_id = ?
+            """
+
+    borrower_record = conn.execute(query, (borrower_id,)).fetchone()
+
+    if borrower_record is None:
+        raise ValueError(f"{borrower_config['column_name'].capitalize()} ID '{borrower_id}' does not exist, please try again!")
+
+    return borrower_record    
+
+def get_valid_borrower_record(conn, borrower_config):
+    borrower_id = get_borrower_id(borrower_config)
+
+    borrower_record = validate_borrower_record(conn, borrower_id, borrower_config)
+
+    return borrower_record
+
+def get_loan_amount(borrower):
+    name = borrower["name"]
+    
+    return input(f"Enter the amount {name} would like to borrow: ").strip()
+
+def validate_loan_amount(amount):
+    try:
+        loan_amount = float(amount)
+
+    except ValueError as e:
+        raise ValueError("Invalid input. Please enter a numeric number.") from e
+
+    if loan_amount <= 0:
+        raise ValueError("Loan amount must be greater than R0, please try again!")
+
+    return loan_amount
+
+def get_valid_loan_amount(borrower):
+    amount = get_loan_amount(borrower)
+    
+    return validate_loan_amount(amount)
+
 def add_loan(conn):
     borrower_type  = ''
 
@@ -499,7 +591,7 @@ def validate_repayment(borrower_name, outstanding_balance):
         try:
             repayment_amount = float(input(f"Enter amount {borrower_name} is repaying: ").strip())
     
-            if repayment_amount < 0:
+            if repayment_amount <= 0:
                 print("Repayment amount cannot be below R0!, please try again!")
                 continue
     
@@ -620,15 +712,16 @@ def get_outstanding_loans_for_borrower(conn, table, column, borrower_id):
 
     return borrower_outstanding_loans
 
-
 def get_borrower_configs():
     borrower_configs = {
         1:{
-            "table_name" : "members"
+            "table_name" : "members",
+            "borrower_type" : "member"
         },
 
         2:{
-            "table_name" : "borrowers"
+            "table_name" : "borrowers",
+            "borrower_type" : "external"
         }
     }
 

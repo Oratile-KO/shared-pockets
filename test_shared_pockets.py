@@ -135,7 +135,7 @@ class TestValidateRepayment(unittest.TestCase):
         self.assertEqual(mock_input.call_count, 2)
 
     def test_repayment_below_minimum_then_valid_repayment(self):
-        with patch('builtins.input', side_effect=["-1.50", "200"]) as mock_input:
+        with patch('builtins.input', side_effect=["0.0", "200"]) as mock_input:
             repayment_amount = validate_repayment("John", 500)
 
         self.assertEqual(repayment_amount, 200.0)
