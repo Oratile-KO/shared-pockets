@@ -288,24 +288,20 @@ def create_loan(conn, db_id, borrower_type, amount):
 
     conn.commit()
 
-
 def get_borrower_config():
     return input("Please select borrower type: \n1. Member \n2. External Borrower \n3. Close\n").strip()
 
-def validate_borrower_config():
+def validate_borrower_config(borrower_config_function):
     try:
-        borrower_config = int(get_borrower_config())
+        borrower_config = int(borrower_config_function())
 
-    except ValueError as e:
-        raise ValueError("Invalid input, please enter either '1', '2' or '3'!") from e
-
-    if borrower_config < 1 or borrower_config > 3:
+    except ValueError:
         raise ValueError("Invalid input, please enter either '1', '2' or '3'!")
 
+    if not 1 <= borrower_config <= 3:
+        raise ValueError("Invalid input, please enter either '1', '2' or '3'!")
+    
     return borrower_config
-
-def get_valid_borrower_config():
-    return validate_borrower_config()
 
 def get_existing_borrowers(conn, borrower_config):
     query = f"""SELECT {borrower_config['column_name']}_id as "{borrower_config['column_name']}_id", name as "name" 
@@ -358,9 +354,7 @@ def get_valid_borrower_record(conn, borrower_config):
 
     return borrower_record
 
-def get_loan_amount(borrower):
-    name = borrower["name"]
-    
+def get_loan_amount(name):
     return input(f"Enter the amount {name} would like to borrow: ").strip()
 
 def validate_loan_amount(amount):
@@ -375,158 +369,100 @@ def validate_loan_amount(amount):
 
     return loan_amount
 
-def get_valid_loan_amount(borrower):
-    amount = get_loan_amount(borrower)
+def get_valid_loan_amount(name):
+    amount = get_loan_amount(name)
     
     return validate_loan_amount(amount)
 
-def add_loan(conn):
-    borrower_type  = ''
+def get_external_borrower_config():
+    return input("Is the external borrower new or existing? \n1. New Borrower \n2. Existing Borrower \n3. Close \n").strip()
 
+def get_new_external_borrower_name():
+    return input("Enter borrower name: ").strip().capitalize()
+
+def validate_new_external_borrower_name():
+    name = get_new_external_borrower_name()
+
+    if not name:
+        raise ValueError("External borrower name cannot be empty, please try again!")
+
+    return name
+
+def insert_new_borrower_into_borrowers_table_and_return_db_id(conn, name):
+    borrower_id = generate_id(conn, "borrowers", "borrower_id", "B")
+
+    cursor = conn.execute("""
+            INSERT INTO borrowers(name, borrower_id)
+            VALUES(?, ?)
+            """, (name, borrower_id))
+    
+    return cursor.lastrowid
+
+def retry_until_valid(validation_function, *args):
     while True:
         try:
-            borrower_choice = int(input("Please select borrower type: \n1. Member \n2. External Borrower \n3. Close\n").strip())
+            result = validation_function(*args)
+            break
 
-            if borrower_choice == 1:
-                borrower_type = 'member'
-                break
+        except ValueError as e:
+            print(e) 
 
-            elif borrower_choice == 2:
-                borrower_type = 'external'
-                break
+    return result
 
-            elif borrower_choice == 3:
-                break
-
-            else:
-                print("Invalid selection, please enter '1' or '2'!")
-
-        except ValueError:
-            print("Invalid input, please enter '1' or '2'!")
-
-    if borrower_type == 'member':
-        view_members(conn)
-        while True: 
-                member_id  = input("Enter Member ID of member taking a loan: ").strip().capitalize()
-
-                cursor = conn.execute("""
-                        SELECT id as "db_id", member_id as "member_id", name as "name"
-                        FROM members
-                        WHERE member_id = ?
-                    """, (member_id,))
-                
-                member = cursor.fetchone()
-
-                if not member:
-                    print(f"Member ID '{member_id}' does not exist, please try again!")
-
-                else:
-                    while True:
-                        try:
-                            amount = float(input(f"Enter amount {member["name"]} wants to borrow: "))
-
-                            if amount <= 0:
-                                print("Amount cannot be below R1, please try again!")
-
-                            else:
-                                create_loan(conn, member["db_id"], borrower_type, amount)
-                                break
-
-                        except ValueError:
-                            print("Invalid input, please try again!")
-                    break
-
-    if borrower_type == 'external':
-       while True:
+def add_loan(conn):
+    while True:
         try:
-            external_type = int(input("Is the external borrower new or existing? \n1. New Borrower \n2. Existing Borrower \n").strip())
+            borrower_config = validate_borrower_config(get_borrower_config)
 
-            if external_type == 1:
+            if borrower_config == 3:
+                break
+            
+            if borrower_config not in borrower_configs:
+                continue
+
+            if borrower_config == 2:
+                config = borrower_configs[borrower_config]
+
                 while True:
-                    name = input("Enter borrower name: ").strip().capitalize()
+                    try:
+                        external_config_selection = validate_borrower_config(get_external_borrower_config)
 
-                    if not name:
-                        print("Borrower name cannot be blank!")
+                    except ValueError as e:
+                        print(e)
                         continue
 
-                    else:
-                        while True:
-                            try:
-                                amount = float(input(f"Enter amount {name} is requesting to borrow: ").strip())
+                    if external_config_selection == 3:
+                        break
 
-                                if amount <= 0:
-                                    print("Amount cannot be below R1, please try again!")
+                    if external_config_selection == 1:
+                        first_time_external_borrower_name = retry_until_valid(validate_new_external_borrower_name)
 
-                                else:
-                                    borrower_id = generate_id(conn, "borrowers", "borrower_id", "B")
-                                    cursor = conn.execute("""
-                                            INSERT INTO borrowers(name, borrower_id)
-                                            VALUES(?, ?)
-                                            """, (name, borrower_id ))
-                                    
-                                    borrower_db_id = cursor.lastrowid
+                        amount = retry_until_valid(get_valid_loan_amount, first_time_external_borrower_name)
 
-                                    create_loan(conn, borrower_db_id, borrower_type, amount)
-                                    break
-                            except ValueError:
-                                print("Invalid amount! Please try again.")
-                    break
+                        borrower_db_id = insert_new_borrower_into_borrowers_table_and_return_db_id(conn, first_time_external_borrower_name)
 
-            elif external_type == 2:
-                cursor = conn.execute("""
-                            SELECT borrower_id as "borrower_id", name as "name"
-                            FROM borrowers
-                        """)
-                has_borrowers = cursor.fetchall()
+                        create_loan(conn, borrower_db_id, config["borrower_type"], amount)
 
-                if not has_borrowers:
-                    print("There are no existing external borrowers yet! Please try again.")
-                    continue
+                        break
 
-                else:
-                    print(f"{'Borrower ID':<13}{'Name':<15}")
+            config = borrower_configs[borrower_config]
 
-                    for borrower in has_borrowers:
-                        borrower_id = borrower["borrower_id"]
-                        borrower_name = borrower["name"]
+            display_borrowers(conn, config)
 
-                        print(f"{borrower_id:<13}{borrower_name}")
+            borrower = retry_until_valid(get_valid_borrower_record, conn, config)
+            
+            borrower_db_id = borrower["db_id"]
 
-                    while True:
-                            borrower_id = input("Enter Borrower ID: ").strip().capitalize()
+            borrower_type = config["borrower_type"]
 
-                            cursor = conn.execute("""
-                                        SELECT id as "db_id", name as "name"
-                                        FROM borrowers
-                                        WHERE borrower_id = ?
-                                    """, (borrower_id,))
-                            
-                            existing_borrower = cursor.fetchone()
+            amount = retry_until_valid(get_valid_loan_amount, borrower["name"])
 
-                            if existing_borrower is None:
-                                print("Incorrect Borrower ID entered, please try again!")
-                                continue
+            create_loan(conn, borrower_db_id, borrower_type, amount)
 
-                            else:
-                                while True:
-                                    try:
-                                        amount = float(input(f"Enter amount {existing_borrower["name"]} wants to borrow: "))
+            break
 
-                                        if amount <= 0:
-                                            print("Amount cannot be below R1, please try again!")
-                                            continue
-
-                                        else:
-                                            create_loan(conn, existing_borrower["db_id"], borrower_type, amount)
-                                            break
-
-                                    except ValueError:
-                                        print("Invalid amount, please try again!")
-                                break
-        except ValueError:
-            print("Invalid selection, please enter either '1' or '2'!")
-            continue
-        break
+        except ValueError as e:
+            print(e)
 
 def view_loans(conn):
    cursor = conn.execute("""
