@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, date
 import sqlite3
+from dataclasses import dataclass, field
 
 def create_tables(conn):
     
@@ -288,9 +289,17 @@ def create_loan(conn, db_id, borrower_type, amount):
 
     conn.commit()
 
-menu_options = [1, 2, 3]
+@dataclass
+class Draftloan:
+    borrower_type: str
+    name: str
+    amount: float
+    date_issued: date = field(default_factory=date.today)
 
-def format_menu_options(valid_options):
+menu_options = [1, 2, 3]
+loan_confirmation_options = [1, 2, 3, 4]
+
+def format_menu_options(valid_options): 
     if len(valid_options) == 1:
         return str(valid_options[0])
 
@@ -299,10 +308,18 @@ def format_menu_options(valid_options):
 def get_borrower_menu_input():  
     return input("Please select borrower type: \n1. Member \n2. External Borrower \n3. Close\n").strip()
 
-def build_invalid_input_message(valid_options):
-    formatted_options = format_menu_options(valid_options)
+def loan_summary(loan): 
+    return f"{loan.amount:,.2f} to {loan.name}"
 
-    return f"Invalid input, please enter {formatted_options}!"
+def get_loan_confirmation_input(loan):
+    formmatted_message = loan_summary(loan)
+
+    return input(f"\nYou are about to issue a loan of R{formmatted_message}:\n1. Confirm \n2. Change amount \n3. Change borrower \n4. Cancel \n")
+
+def build_invalid_input_message(valid_options):
+    formatted_message = format_menu_options(valid_options)
+
+    return f"Invalid input, please enter {formatted_message}!"
 
 def validate_menu_selection(get_menu_input, valid_options):
     try:
@@ -435,7 +452,9 @@ def existing_borrower_path(conn, borrower_config):
 
     amount = retry_until_valid(get_valid_loan_amount, borrower["name"])
 
-    create_loan(conn, borrower_db_id, borrower_type, amount)
+    #create_loan(conn, borrower_db_id, borrower_type, amount)
+
+    return Draftloan(borrower_type, borrower["name"], amount)
 
 def external_borrower_path(conn, borrower_config):
     config = borrower_configs[borrower_config]
@@ -456,12 +475,14 @@ def external_borrower_path(conn, borrower_config):
 
             amount = retry_until_valid(get_valid_loan_amount, first_time_external_borrower_name)
 
-            borrower_db_id = insert_new_borrower_into_borrowers_table_and_return_db_id(conn, first_time_external_borrower_name)
+            #borrower_db_id = insert_new_borrower_into_borrowers_table_and_return_db_id(conn, first_time_external_borrower_name)
 
-            create_loan(conn, borrower_db_id, config["borrower_type"], amount)
+            #create_loan(conn, borrower_db_id, config["borrower_type"], amount)
+
+            return Draftloan(config["borrower_type"], first_time_external_borrower_name, amount)
 
         else:
-            existing_borrower_path(conn, borrower_config)
+           return existing_borrower_path(conn, borrower_config)
 
 def add_loan(conn):
     while True:
@@ -475,11 +496,14 @@ def add_loan(conn):
                 continue
 
             if borrower_config == 2:
-                external_borrower_path(conn, borrower_config)
-                break
+                draft_loan = external_borrower_path(conn, borrower_config)
+
+                loan_confirmation = retry_until_valid(validate_menu_selection, lambda: get_loan_confirmation_input(draft_loan), loan_confirmation_options)
 
             else:
-                existing_borrower_path(conn, borrower_config)
+                draft_loan = existing_borrower_path(conn, borrower_config)
+
+                loan_confirmation = retry_until_valid(validate_menu_selection, lambda: get_loan_confirmation_input(draft_loan), loan_confirmation_options)
 
         except ValueError as e:
             print(e)
