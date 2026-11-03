@@ -288,20 +288,33 @@ def create_loan(conn, db_id, borrower_type, amount):
 
     conn.commit()
 
-def get_borrower_config():
+menu_options = [1, 2, 3]
+
+def format_menu_options(valid_options):
+    if len(valid_options) == 1:
+        return str(valid_options[0])
+
+    return f"{', '.join(map(str, valid_options[:-1]))} or {valid_options[-1]}"
+
+def get_borrower_menu_input():  
     return input("Please select borrower type: \n1. Member \n2. External Borrower \n3. Close\n").strip()
 
-def validate_borrower_config(borrower_config_function):
+def build_invalid_input_message(valid_options):
+    formatted_options = format_menu_options(valid_options)
+
+    return f"Invalid input, please enter {formatted_options}!"
+
+def validate_menu_selection(get_menu_input, valid_options):
     try:
-        borrower_config = int(borrower_config_function())
+        selected_option = int(get_menu_input())
 
-    except ValueError:
-        raise ValueError("Invalid input, please enter either '1', '2' or '3'!")
+    except ValueError:  
+        raise ValueError(build_invalid_input_message(valid_options))
 
-    if not 1 <= borrower_config <= 3:
-        raise ValueError("Invalid input, please enter either '1', '2' or '3'!")
+    if selected_option not in valid_options:
+        raise ValueError(build_invalid_input_message(valid_options))
     
-    return borrower_config
+    return selected_option
 
 def get_existing_borrowers(conn, borrower_config):
     query = f"""SELECT {borrower_config['column_name']}_id as "{borrower_config['column_name']}_id", name as "name" 
@@ -409,10 +422,51 @@ def retry_until_valid(validation_function, *args):
 
     return result
 
+def existing_borrower_path(conn, borrower_config):
+    config = borrower_configs[borrower_config]
+
+    display_borrowers(conn, config)
+
+    borrower = retry_until_valid(get_valid_borrower_record, conn, config)
+    
+    borrower_db_id = borrower["db_id"]
+
+    borrower_type = config["borrower_type"]
+
+    amount = retry_until_valid(get_valid_loan_amount, borrower["name"])
+
+    create_loan(conn, borrower_db_id, borrower_type, amount)
+
+def external_borrower_path(conn, borrower_config):
+    config = borrower_configs[borrower_config]
+
+    while True:
+        try:
+            external_config_selection = validate_menu_selection(get_external_borrower_config, menu_options)
+
+        except ValueError as e:
+            print(e)
+            continue
+
+        if external_config_selection == 3:
+            break
+
+        if external_config_selection == 1:
+            first_time_external_borrower_name = retry_until_valid(validate_new_external_borrower_name)
+
+            amount = retry_until_valid(get_valid_loan_amount, first_time_external_borrower_name)
+
+            borrower_db_id = insert_new_borrower_into_borrowers_table_and_return_db_id(conn, first_time_external_borrower_name)
+
+            create_loan(conn, borrower_db_id, config["borrower_type"], amount)
+
+        else:
+            existing_borrower_path(conn, borrower_config)
+
 def add_loan(conn):
     while True:
         try:
-            borrower_config = validate_borrower_config(get_borrower_config)
+            borrower_config = validate_menu_selection(get_borrower_menu_input, menu_options)
 
             if borrower_config == 3:
                 break
@@ -421,45 +475,11 @@ def add_loan(conn):
                 continue
 
             if borrower_config == 2:
-                config = borrower_configs[borrower_config]
+                external_borrower_path(conn, borrower_config)
+                break
 
-                while True:
-                    try:
-                        external_config_selection = validate_borrower_config(get_external_borrower_config)
-
-                    except ValueError as e:
-                        print(e)
-                        continue
-
-                    if external_config_selection == 3:
-                        break
-
-                    if external_config_selection == 1:
-                        first_time_external_borrower_name = retry_until_valid(validate_new_external_borrower_name)
-
-                        amount = retry_until_valid(get_valid_loan_amount, first_time_external_borrower_name)
-
-                        borrower_db_id = insert_new_borrower_into_borrowers_table_and_return_db_id(conn, first_time_external_borrower_name)
-
-                        create_loan(conn, borrower_db_id, config["borrower_type"], amount)
-
-                        break
-
-            config = borrower_configs[borrower_config]
-
-            display_borrowers(conn, config)
-
-            borrower = retry_until_valid(get_valid_borrower_record, conn, config)
-            
-            borrower_db_id = borrower["db_id"]
-
-            borrower_type = config["borrower_type"]
-
-            amount = retry_until_valid(get_valid_loan_amount, borrower["name"])
-
-            create_loan(conn, borrower_db_id, borrower_type, amount)
-
-            break
+            else:
+                existing_borrower_path(conn, borrower_config)
 
         except ValueError as e:
             print(e)
